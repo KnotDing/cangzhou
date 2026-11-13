@@ -15,7 +15,7 @@ printf 'header = "Authorization: token %s"\n' "$GITEA_TOKEN" > "$tmp/curl.conf"
 api="${GITHUB_API_URL%/}/repos/${GITHUB_REPOSITORY}"
 status="$(curl --config "$tmp/curl.conf" --silent --show-error --output "$tmp/release.json" --write-out '%{http_code}' "$api/releases/tags/$RELEASE_TAG")"
 if [ "$status" = 404 ]; then
-  jq -n --arg tag "$RELEASE_TAG" '{tag_name:$tag,name:("藏舟 " + $tag),body:"自动构建的测试版。安装前请核验 SHA256SUMS 并阅读 README。",draft:false,prerelease:false}' > "$tmp/create.json"
+  jq -n --arg tag "$RELEASE_TAG" '{tag_name:$tag,name:("藏舟 " + $tag + "（测试版）"),body:"自动构建的测试版。安装前请核验 SHA256SUMS 并阅读 README。",draft:false,prerelease:true}' > "$tmp/create.json"
   curl --config "$tmp/curl.conf" --fail --silent --show-error -H 'Content-Type: application/json' -X POST --data-binary "@$tmp/create.json" "$api/releases" > "$tmp/release.json"
 elif [ "$status" != 200 ]; then
   echo "Unable to inspect existing release (HTTP $status)" >&2; exit 1

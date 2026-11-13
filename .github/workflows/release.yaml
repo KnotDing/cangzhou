@@ -52,5 +52,5 @@ jobs:
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
           else
-            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --title "藏舟 $RELEASE_TAG" --notes '自动构建的测试版。安装前请核验 SHA256SUMS 并阅读 README。'
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --prerelease --title "藏舟 $RELEASE_TAG（测试版）" --notes '自动构建的测试版。安装前请核验 SHA256SUMS 并阅读 README。'
           fi
