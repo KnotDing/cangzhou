@@ -1,10 +1,24 @@
-# 藏舟
+<div align="center">
+  <img src="packaging/fnos/app/ui/images/icon_256.png" alt="藏舟图标" width="120">
 
-藏舟是一个面向飞牛 fnOS 的加密备份应用。在源 NAS 上运行，通过 WebDAV 或 SFTP 将数据备份到另一台设备；Kopia 负责加密仓库和快照，藏舟提供任务管理和网页界面。
+  # 藏舟
+
+  **把重要的东西妥善收藏，在需要时依然找得到。**
+
+  面向飞牛 fnOS 的加密备份应用 · Kopia 快照 · WebDAV / SFTP
+
+  [下载安装包](https://github.com/KnotDing/cangzhou/releases/tag/v0.4.6) · [Gitea 发布页](https://gitea.knotding.com/knot/cangzhou/releases) · [开始使用](#安装和首次备份) · [开发构建](#开发与构建)
+</div>
+
+藏舟运行在源 NAS 上，通过 WebDAV 或 SFTP 将数据备份到另一台设备。Kopia 负责加密仓库和快照，藏舟提供任务管理与嵌入飞牛的应用界面。
+
+![藏舟备份任务列表界面，展示两个示例任务](docs/images/overview.png)
+
+<p align="center"><sub>备份概览 · 截图使用模拟任务和示例地址</sub></p>
 
 当前安装包为 **0.4.6，x86-64，要求 fnOS 1.1.3100 或以上**。它通过飞牛统一网关在应用窗口中打开，需要飞牛管理员身份。
 
-- [GitHub Releases](https://github.com/KnotDing/cangzhou/releases)：标签发布后提供 FPK、源码包和校验文件
+- [GitHub Releases](https://github.com/KnotDing/cangzhou/releases)：提供 FPK、源码包和校验文件
 - [本版本测试说明](releases/0.4.6/README.md)
 
 本地工作目录若保留了现成安装包，可从 `dist/` 找到；构建产物不纳入 Git。
@@ -103,8 +117,7 @@ KOPIA=/absolute/path/to/verified-linux-x86_64-kopia \
 | `releases/` | 历史版本模板和测试说明；本地可能保留未跟踪的源码包 |
 | `dist/`、`artifacts/` | 本地生成的 FPK 和构建产物，不纳入 Git |
 | `design/` | 应用图标素材和生成脚本 |
-| `docs/`、`权限研究.md` | 早期权限诊断及测试记录；内容反映记录时的状态 |
-| `package/`、`source/` | 早期 0.0.2 权限诊断包，不是当前应用源码或打包模板 |
+| `docs/` | 使用及持续集成相关说明、界面图片 |
 
 运行时配置位于飞牛提供的 `TRIM_PKGVAR` 应用私有目录，包含 `state.json`、每个任务的 Kopia 连接文件和日志、缓存及恢复结果。设备上可先查看 `/var/apps/cangzhou/var/server.log`；任务的 Kopia 日志位于该目录下对应的 `jobs/<任务编号>/logs/cli-logs/`。发送日志前请遮掉地址、账号、密码和令牌。
 
@@ -112,4 +125,3 @@ KOPIA=/absolute/path/to/verified-linux-x86_64-kopia \
 
 - [Kopia 文档：仓库和连接方式](https://kopia.io/docs/repositories/)
 - [飞牛开放平台](https://developer.fnnas.com/)
-- [早期权限研究记录](权限研究.md)（记录的是早期诊断阶段，不代表当前版本）
