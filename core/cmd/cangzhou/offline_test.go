@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -72,7 +73,11 @@ func TestOfflineRepositoryRealKopia(t *testing.T) {
 			t.Fatalf("kopia: %v %s", e, b)
 		}
 	}
-	run("repository", "create", "filesystem", "--path="+repo, "--no-use-keychain", "--no-check-for-updates")
+	args := []string{"repository", "create", "filesystem", "--path=" + repo, "--no-check-for-updates"}
+	if runtime.GOOS == "darwin" {
+		args = append(args, "--no-use-keychain")
+	}
+	run(args...)
 	run("snapshot", "create", "--no-progress", "--", source)
 	a := &App{dir: data, kopia: binary, roots: []string{root}, csrf: "token", ctx: context.Background(), proxies: map[string]*davProxy{}, proxyErrors: map[string]string{}}
 	open := func(mode, p string) {

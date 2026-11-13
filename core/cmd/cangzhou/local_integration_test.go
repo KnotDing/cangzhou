@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -29,7 +30,11 @@ func TestRealKopiaLocalRepository(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	cmd := exec.Command(binary, "repository", "create", "filesystem", "--path="+repo, "--no-use-keychain", "--no-check-for-updates")
+	args := []string{"repository", "create", "filesystem", "--path=" + repo, "--no-check-for-updates"}
+	if runtime.GOOS == "darwin" {
+		args = append(args, "--no-use-keychain")
+	}
+	cmd := exec.Command(binary, args...)
 	cmd.Env = append(os.Environ(), "KOPIA_PASSWORD=test-password-123", "KOPIA_CONFIG_PATH="+filepath.Join(state, "repository.config"), "KOPIA_LOG_DIR="+filepath.Join(state, "logs"), "KOPIA_CACHE_DIRECTORY="+filepath.Join(state, "cache"))
 	if out, e := cmd.CombinedOutput(); e != nil {
 		t.Fatalf("create: %v %s", e, out)
