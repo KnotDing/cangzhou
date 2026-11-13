@@ -1,0 +1,7 @@
+#!/bin/bash
+set -eu
+# Restart so the process receives the current fnOS authorization environment.
+if "/var/apps/${TRIM_APPNAME}/cmd/main" status; then
+    "/var/apps/${TRIM_APPNAME}/cmd/main" stop
+    "/var/apps/${TRIM_APPNAME}/cmd/main" start
+fi

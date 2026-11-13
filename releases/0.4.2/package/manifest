@@ -1,0 +1,13 @@
+appname=cangzhou
+version=0.4.2
+display_name=藏舟
+desc=加密备份至 WebDAV 的测试版应用
+platform=x86
+source=thirdparty
+maintainer=local
+distributor=local
+os_min_version=1.1.3100
+disable_authorization_path=false
+desktop_uidir=ui
+desktop_applaunchname=cangzhou.Application
+micro_app=true

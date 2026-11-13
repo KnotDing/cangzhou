@@ -1,0 +1,66 @@
+# macOS 和常见编辑器
+.DS_Store
+.AppleDouble
+.LSOverride
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 构建结果与发布归档；保留发布说明、manifest、脚本和资源
+*.fpk
+/releases/*/*.tar.gz
+/core/cangzhou
+/core/cmd/cangzhou/cangzhou
+/package/app/cangzhou-diagnostic
+/releases/*/package/app/cangzhou-server
+/releases/*/package/app/cangzhou-diagnostic
+/releases/*/package/app/kopia
+
+# Go 测试、覆盖率和构建缓存
+*.test
+*.out
+coverage.txt
+coverage.html
+.coverage/
+/core/.cache/
+
+# 本机运行时数据和备份恢复文件
+/var/
+/jobs/
+/logs/
+/cache/
+/restores/
+/offline-*/
+**/state.json
+**/state.json.tmp
+**/job.json
+**/jobs.json
+**/repository.config
+**/repository.config.*
+**/cangzhou-settings*.json
+**/server.pid
+**/app.sock
+*.log
+
+# 本地凭据与环境配置
+.env
+.env.*
+!.env.example
+!.env.sample
+*.key
+*.pem
+*.p12
+*.pfx
+known_hosts
+
+# 本机历史诊断记录包含设备路径，不纳入公开仓库
+/docs/2026-11-13-设备及备份测试记录.md
+/releases/0.2.0/README.md
+
+# 本地 CI 工具和构建结果
+/tools/
+/artifacts/
+/packaging/fnos/app/kopia
+/packaging/fnos/app/cangzhou-server

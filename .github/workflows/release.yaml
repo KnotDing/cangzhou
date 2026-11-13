@@ -1,0 +1,56 @@
+name: Build and publish Cangzhou release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing version tag, for example v0.4.6
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - name: Fetch verified build tools
+        run: ./scripts/fetch-ci-tools.sh
+      - name: Test
+        env:
+          CANGZHOU_TEST_KOPIA: ${{ github.workspace }}/tools/kopia
+        run: |
+          go -C core vet ./...
+          go -C core test -race ./...
+      - name: Build and verify release assets
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+          FNPACK: ${{ github.workspace }}/tools/fnpack
+          KOPIA: ${{ github.workspace }}/tools/kopia
+        run: ./scripts/build-fpk.sh
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          assets=("artifacts/cangzhou-${version}-x86.fpk" "artifacts/cangzhou-${version}-source.tar.gz" artifacts/SHA256SUMS)
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --title "藏舟 $RELEASE_TAG" --notes '自动构建的测试版。安装前请核验 SHA256SUMS 并阅读 README。'
+          fi

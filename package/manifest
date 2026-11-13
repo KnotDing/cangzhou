@@ -1,0 +1,11 @@
+appname=cangzhou
+version=0.0.2
+display_name=藏舟（权限诊断）
+desc=仅用于核验应用目录授权，不具备备份或恢复功能
+author=local
+platform=x86
+source=thirdparty
+maintainer=local
+distributor=local
+os_min_version=1.1.8
+disable_authorization_path=false

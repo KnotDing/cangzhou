@@ -1,0 +1,46 @@
+name: Cangzhou checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - name: Fetch verified Kopia and fnpack
+        run: ./scripts/fetch-ci-tools.sh
+      - name: Run race and real Kopia integration tests
+        env:
+          CANGZHOU_TEST_KOPIA: ${{ github.workspace }}/tools/kopia
+        run: |
+          go -C core vet ./...
+          go -C core test -race ./...
+      - name: Build and inspect FPK
+        env:
+          FNPACK: ${{ github.workspace }}/tools/fnpack
+          KOPIA: ${{ github.workspace }}/tools/kopia
+        run: ./scripts/build-fpk.sh
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cangzhou-test-fpk
+          path: |
+            artifacts/*.fpk
+            artifacts/*-source.tar.gz
+            artifacts/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14

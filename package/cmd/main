@@ -1,0 +1,29 @@
+#!/bin/bash
+set -eu
+: "${TRIM_PKGVAR:?}" "${TRIM_APPDEST:?}"
+pidfile="$TRIM_PKGVAR/diagnostic.pid"
+log="$TRIM_PKGVAR/diagnostic.log"
+valid() {
+    [ -r "$pidfile" ] || return 1
+    pid=$(cat "$pidfile")
+    case "$pid" in ''|*[!0-9]*) return 1;; esac
+    [ "$(readlink "/proc/$pid/exe" 2>/dev/null || :)" = "$(readlink -f "$TRIM_APPDEST/cangzhou-diagnostic")" ]
+}
+case "${1:-}" in
+start)
+    valid && exit 0
+    umask 077
+    "$TRIM_APPDEST/cangzhou-diagnostic" >> "$log" 2>&1 &
+    echo "$!" > "$pidfile"
+    sleep 1
+    valid || exit 1
+    ;;
+stop)
+    if valid; then kill -TERM "$pid"; fi
+    rm -f "$pidfile"
+    ;;
+status)
+    valid || exit 3
+    ;;
+*) exit 1;;
+esac

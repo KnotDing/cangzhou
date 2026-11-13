@@ -1,0 +1,111 @@
+name: Publish Cangzhou release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    continue-on-error: true
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+      mismatch: ${{ steps.fetch.outputs.mismatch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Wait for matching GitHub release
+        id: fetch
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          version="${RELEASE_TAG#v}"
+          [ "$(sed -n 's/^version=//p' packaging/fnos/manifest)" = "$version" ]
+          local_sha="$(git rev-parse HEAD^{commit})"
+          mkdir -p artifacts
+          available=false
+          for attempt in $(seq 1 12); do
+            refs="$(git ls-remote https://github.com/KnotDing/cangzhou.git "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" || true)"
+            remote_sha="$(printf '%s\n' "$refs" | awk '/\^\{\}$/ {print $1; found=1} END {if (!found) exit 1}' || true)"
+            if [ -z "$remote_sha" ]; then remote_sha="$(printf '%s\n' "$refs" | awk -v ref="refs/tags/$RELEASE_TAG" '$2==ref {print $1}')"; fi
+            if [ -n "$remote_sha" ] && [ "$remote_sha" != "$local_sha" ]; then
+              echo 'GitHub and Gitea tags point to different commits; refusing to publish.' >&2
+              echo 'mismatch=true' >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            if [ "$remote_sha" = "$local_sha" ] && curl --fail --silent --show-error --location \
+                "https://api.github.com/repos/KnotDing/cangzhou/releases/tags/$RELEASE_TAG" -o "$RUNNER_TEMP/release.json"; then
+              ok=true
+              for name in "cangzhou-$version-x86.fpk" "cangzhou-$version-source.tar.gz" SHA256SUMS; do
+                url="$(jq -er --arg name "$name" '.assets[] | select(.name == $name) | .browser_download_url' "$RUNNER_TEMP/release.json")" || { ok=false; break; }
+                curl --fail --silent --show-error --location "$url" -o "artifacts/$name" || { ok=false; break; }
+              done
+              if [ "$ok" = true ] && python3 - "$version" <<'PYCODE'
+          import pathlib, re, sys
+          v=sys.argv[1]; entries=pathlib.Path('artifacts/SHA256SUMS').read_text().splitlines()
+          want={f'cangzhou-{v}-x86.fpk',f'cangzhou-{v}-source.tar.gz'}
+          parsed=[]
+          for line in entries:
+              m=re.fullmatch(r'([0-9a-f]{64}) [ *]([^/\\]+)',line)
+              if not m: raise SystemExit('invalid checksum list')
+              parsed.append(m.group(2))
+          if len(parsed)!=2 or set(parsed)!=want: raise SystemExit('unexpected checksum entries')
+          PYCODE
+              then
+                if (cd artifacts && sha256sum --check SHA256SUMS); then available=true; break; fi
+              fi
+            fi
+            rm -f artifacts/*
+            if [ "$attempt" -lt 12 ]; then sleep 10; fi
+          done
+          echo "available=$available" >> "$GITHUB_OUTPUT"
+      - name: Publish verified GitHub assets
+        id: publish
+        if: ${{ steps.fetch.outputs.available == 'true' }}
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          ./scripts/publish-gitea.sh
+          echo 'published=true' >> "$GITHUB_OUTPUT"
+
+  fallback:
+    needs: mirror
+    if: ${{ always() && needs.mirror.outputs.published != 'true' && needs.mirror.outputs.mismatch != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - name: Fetch verified build tools
+        run: ./scripts/fetch-ci-tools.sh
+      - name: Test
+        env:
+          CANGZHOU_TEST_KOPIA: ${{ github.workspace }}/tools/kopia
+        run: |
+          go -C core vet ./...
+          go -C core test -race ./...
+      - name: Build fallback release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          FNPACK: ${{ github.workspace }}/tools/fnpack
+          KOPIA: ${{ github.workspace }}/tools/kopia
+        run: ./scripts/build-fpk.sh
+      - name: Publish fallback assets
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: ./scripts/publish-gitea.sh
