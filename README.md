@@ -12,13 +12,13 @@
 
 藏舟运行在源 NAS 上，通过 WebDAV 或 SFTP 将数据备份到另一台设备。Kopia 负责加密仓库和快照，藏舟提供任务管理与嵌入飞牛的应用界面。
 
-![藏舟备份概览，展示两个示例任务](docs/images/overview.png)
+![藏舟备份概览，展示两个示例任务](docs/images/0.4.8/overview.png)
 
 <p align="center"><sub>备份概览 · 以下截图均使用模拟数据与示例地址</sub></p>
 
 当前安装包为 **0.4.8，x86-64，要求 fnOS 1.1.3100 或以上**。它通过飞牛统一网关在应用窗口中打开，需要飞牛管理员身份。
 
-- [GitHub Releases](https://github.com/KnotDing/cangzhou/releases)：提供 FPK、源码包和校验文件
+- [GitHub Releases](https://github.com/KnotDing/cangzhou/releases)：提供 FPK、校验文件以及平台自动生成的源码归档
 - [本版本测试说明](releases/0.4.8/README.md)
 
 本地工作目录若保留了现成安装包，可从 `dist/` 找到；构建产物不纳入 Git。
@@ -51,42 +51,46 @@
 <details>
 <summary><strong>新建任务与任务详情</strong></summary>
 
-![新建备份任务](docs/images/new-task.png)
+![新建备份任务](docs/images/0.4.8/new-task.png)
 
-![任务详情和仓库统计](docs/images/task.png)
+![任务详情和仓库统计](docs/images/0.4.8/task.png)
 
 </details>
 
 <details>
 <summary><strong>备份恢复与离线恢复</strong></summary>
 
-![备份恢复页面](docs/images/recoveries.png)
+![备份恢复页面](docs/images/0.4.8/recoveries.png)
 
-![离线恢复页面](docs/images/offline.png)
+![离线恢复页面](docs/images/0.4.8/offline.png)
 
-![历史快照](docs/images/snapshots.png)
+![已打开的离线仓库快照](docs/images/0.4.8/offline-open.png)
 
-![逐级浏览快照目录](docs/images/browse.png)
+![历史快照](docs/images/0.4.8/snapshots.png)
+
+![逐级浏览快照目录](docs/images/0.4.8/browse.png)
 
 </details>
 
 <details>
 <summary><strong>远程路径与目录权限</strong></summary>
 
-![远程路径页面](docs/images/remote.png)
+![WebDAV 远程路径页面](docs/images/0.4.8/remote.png)
 
-![目录权限页面](docs/images/permissions.png)
+![SFTP 远程路径页面](docs/images/0.4.8/remote-sftp.png)
+
+![目录权限页面](docs/images/0.4.8/permissions.png)
 
 </details>
 
 <details>
 <summary><strong>备份限速、设置导出和使用提示</strong></summary>
 
-![备份限速页面](docs/images/limits.png)
+![备份限速页面](docs/images/0.4.8/limits.png)
 
-![设置导出与导入页面](docs/images/settings.png)
+![设置导出与导入页面](docs/images/0.4.8/settings.png)
 
-![使用提示页面](docs/images/tips.png)
+![使用提示页面](docs/images/0.4.8/tips.png)
 
 </details>
 
@@ -126,7 +130,7 @@
 
 ## 开发与构建
 
-源码使用 Go **1.24 或以上**，依赖已放在 `core/vendor/`。安装包包含 Kopia **0.23.1** 的 Linux x86-64 可执行文件；源码包不包含该二进制文件。构建 FPK 还需要安装飞牛 `fnpack`；本项目之前使用过 1.2.3。
+源码使用 Go **1.24 或以上**，依赖已放在 `core/vendor/`。安装包包含 Kopia **0.23.1** 的 Linux x86-64 可执行文件；平台提供的源码归档不包含该二进制文件。构建 FPK 还需要安装飞牛 `fnpack`；本项目之前使用过 1.2.3。
 
 运行测试：
 
@@ -149,14 +153,14 @@ Kopia 可从[官方发布页](https://github.com/kopia/kopia/releases/tag/v0.23.
 
 ### 从当前源码构建 FPK
 
-`packaging/fnos/` 是当前受版本管理的打包模板，不含 Kopia 和编译后的服务程序。构建脚本使用当前 Git 提交生成源码包；请先提交更改，确保源码包与安装包一致。
+`packaging/fnos/` 是当前受版本管理的打包模板，不含 Kopia 和编译后的服务程序。构建脚本使用当前干净的 Git 提交，确保安装包与对应的版本源码一致。
 
 ```sh
 # 从项目根目录执行；路径都需为绝对路径。
 FNPACK=/absolute/path/to/fnpack \
 KOPIA=/absolute/path/to/verified-linux-x86_64-kopia \
   ./scripts/build-fpk.sh
-# artifacts/ 中包含 FPK、源码包和 SHA256SUMS。
+# artifacts/ 中包含 FPK 和 SHA256SUMS。
 ```
 
 旧版 `releases/` 源码归档中的构建说明只适用于该归档。GitHub 和 Gitea 工作流、版本标签要求及发布行为见 [CI 和发布说明](docs/ci.md)。

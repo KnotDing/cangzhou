@@ -1,0 +1,41 @@
+name: Remove redundant v0.4.8 source asset
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify and update v0.4.8 assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          tag=v0.4.8
+          package=cangzhou-0.4.8-x86.fpk
+          source=cangzhou-0.4.8-source.tar.gz
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          mkdir -p "$tmp/old" "$tmp/new"
+          gh release download "$tag" --repo "$repo" --dir "$tmp/old" --pattern "$package" --pattern "$source" --pattern SHA256SUMS
+          python3 - "$tmp/old/SHA256SUMS" "$package" "$source" <<'PY'
+          import pathlib, re, sys
+          lines=pathlib.Path(sys.argv[1]).read_text().splitlines()
+          names=[]
+          for line in lines:
+              m=re.fullmatch(r'([0-9a-f]{64}) [ *]([^/\\]+)',line)
+              if not m: raise SystemExit('Invalid checksums')
+              names.append(m.group(2))
+          if len(names)!=2 or set(names)!={sys.argv[2],sys.argv[3]}: raise SystemExit('Unexpected release assets')
+          PY
+          (cd "$tmp/old" && sha256sum -c SHA256SUMS)
+          (cd "$tmp/old" && sha256sum "$package" > "$tmp/new/SHA256SUMS")
+          if ! gh release upload "$tag" "$tmp/new/SHA256SUMS" --repo "$repo" --clobber; then
+            gh release upload "$tag" "$tmp/old/SHA256SUMS" --repo "$repo" --clobber || true
+            exit 1
+          fi
+          gh release delete-asset "$tag" "$source" --repo "$repo" --yes

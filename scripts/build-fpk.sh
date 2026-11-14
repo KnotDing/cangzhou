@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build only from the checked-in template. The source archive comes from HEAD.
+# Build only from the checked-in template at HEAD.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
@@ -30,9 +30,7 @@ chmod 755 "$tmp/package/app/kopia"
 (cd "$tmp/source/core" && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags='-s -w' -o "$tmp/package/app/cangzhou-server" ./cmd/cangzhou)
 (cd "$tmp" && "$FNPACK" build -d "$tmp/package")
 package="cangzhou-$version-x86.fpk"
-source="cangzhou-$version-source.tar.gz"
 install -m 644 "$tmp/cangzhou.fpk" "$out/$package"
-git archive --format=tar --prefix="cangzhou-$version/" "$commit" | gzip -n > "$out/$source"
 mkdir -p "$tmp/verify" "$tmp/payload"
 tar -xzf "$out/$package" -C "$tmp/verify"
 tar -xzf "$tmp/verify/app.tgz" -C "$tmp/payload"
@@ -51,5 +49,5 @@ for name in ('kopia','cangzhou-server'):
         raise SystemExit(f'{name} is not Linux x86-64 ELF')
 if not (payload/'ui/config').is_file(): raise SystemExit('Missing fnOS UI configuration')
 PY
-(cd "$out" && sha256sum "$package" "$source" > SHA256SUMS && sha256sum -c SHA256SUMS)
-printf 'Package: %s\nSource: %s\nCommit: %s\n' "$out/$package" "$out/$source" "$commit"
+(cd "$out" && sha256sum "$package" > SHA256SUMS && sha256sum -c SHA256SUMS)
+printf 'Package: %s\nCommit: %s\n' "$out/$package" "$commit"

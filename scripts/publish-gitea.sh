@@ -24,7 +24,7 @@ elif [ "$status" != 200 ]; then
 fi
 jq -e --arg tag "$RELEASE_TAG" '.tag_name == $tag and .draft == false' "$tmp/release.json" >/dev/null
 release_id="$(jq -er '.id | numbers' "$tmp/release.json")"
-for name in "cangzhou-$version-x86.fpk" "cangzhou-$version-source.tar.gz" SHA256SUMS; do
+for name in "cangzhou-$version-x86.fpk" SHA256SUMS; do
   asset="artifacts/$name"
   [ -s "$asset" ] || { echo "Missing asset: $name" >&2; exit 1; }
   count="$(jq --arg name "$name" '[.assets[]? | select(.name == $name)] | length' "$tmp/release.json")"

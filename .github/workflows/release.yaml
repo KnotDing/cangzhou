@@ -50,7 +50,7 @@ jobs:
           version="${RELEASE_TAG#v}"
           notes="releases/${version}/README.md"
           test -s "$notes"
-          assets=("artifacts/cangzhou-${version}-x86.fpk" "artifacts/cangzhou-${version}-source.tar.gz" artifacts/SHA256SUMS)
+          assets=("artifacts/cangzhou-${version}-x86.fpk" artifacts/SHA256SUMS)
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
             gh release edit "$RELEASE_TAG" --notes-file "$notes"

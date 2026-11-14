@@ -40,7 +40,6 @@ jobs:
           name: cangzhou-test-fpk
           path: |
             artifacts/*.fpk
-            artifacts/*-source.tar.gz
             artifacts/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
