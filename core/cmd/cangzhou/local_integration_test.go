@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -22,6 +25,12 @@ func TestRealKopiaLocalRepository(t *testing.T) {
 		t.Fatal(e)
 	}
 	if e := os.WriteFile(filepath.Join(src, "a.txt"), []byte("test data"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.Mkdir(filepath.Join(src, "子目录"), 0700); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(filepath.Join(src, "子目录", "nested.txt"), []byte("nested data"), 0600); e != nil {
 		t.Fatal(e)
 	}
 	id := "0123456789abcdef"
@@ -44,6 +53,25 @@ func TestRealKopiaLocalRepository(t *testing.T) {
 	}
 	a.wg.Wait()
 	j := a.jobs[0]
+	snapshots, e := a.list(j)
+	if e != nil || len(snapshots) == 0 {
+		t.Fatalf("list snapshots: %v", e)
+	}
+	root := snapshots[0].Root.Obj
+	browse := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		a.browse(w, httptest.NewRequest("GET", "/browse?job="+id+"&id="+root+"&path="+url.QueryEscape(path), nil))
+		return w
+	}
+	if w := browse(""); w.Code != 200 || !strings.Contains(w.Body.String(), "path=%E5%AD%90%E7%9B%AE%E5%BD%95") || strings.Contains(w.Body.String(), "nested.txt") {
+		t.Fatalf("root browse: %d %s", w.Code, w.Body.String())
+	}
+	if w := browse("子目录"); w.Code != 200 || !strings.Contains(w.Body.String(), "nested.txt") {
+		t.Fatalf("nested browse: %d %s", w.Code, w.Body.String())
+	}
+	if w := browse("../outside"); w.Code != 400 {
+		t.Fatalf("traversal accepted: %d", w.Code)
+	}
 	var live backupProgress
 	_, progressErr := a.runWithProgress(context.Background(), j, func(line string) { parseProgress(line, &live) }, "snapshot", "create", "--json", "--progress", "--fail-fast", "--", src)
 	if progressErr != nil || !live.KnownProcessed {

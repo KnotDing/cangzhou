@@ -189,7 +189,7 @@ func (a *App) runWithProgress(ctx context.Context, cfg Config, update func(strin
 		return nil, fmt.Errorf("Kopia 执行失败: %w: %s", runErr, s)
 	}
 	if readErr != nil {
-		return nil, fmt.Errorf("读取 Kopia 结果失败: %w", readErr)
+		return out, fmt.Errorf("读取 Kopia 结果失败: %w", readErr)
 	}
 	if errReadErr != nil && !errors.Is(errReadErr, errOutputTooLarge) {
 		return nil, fmt.Errorf("读取 Kopia 诊断失败: %w", errReadErr)
@@ -483,13 +483,35 @@ func (a *App) browse(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(a.ctx, 2*time.Minute)
 	defer cancel()
-	out, e := a.run(ctx, cfg, "list", "--recursive", id)
-	if e != nil {
+	path, ok := snapshotBrowsePath(r.URL.Query().Get("path"))
+	if !ok {
+		http.Error(w, "无效目录路径", http.StatusBadRequest)
+		return
+	}
+	objectPath := id
+	if path != "" {
+		objectPath += "/" + path
+	}
+	out, e := a.run(ctx, cfg, "list", "--long", "--no-error-summary", "--", objectPath)
+	if e != nil && !errors.Is(e, errOutputTooLarge) {
 		http.Error(w, e.Error(), 500)
 		return
 	}
+	text := string(out)
+	if errors.Is(e, errOutputTooLarge) {
+		// A partial final line must never be interpreted as a complete directory name.
+		if i := strings.LastIndexByte(text, '\n'); i >= 0 {
+			text = text[:i+1]
+		} else {
+			text = ""
+		}
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = browsePage.Execute(w, struct{ JobID, Text string }{cfg.ID, string(out)})
+	_ = browsePage.Execute(w, struct {
+		JobID, ID, Path, Parent, Text string
+		Directories                   []browseDirectory
+		Truncated                     bool
+	}{cfg.ID, id, path, snapshotBrowseParent(path), text, snapshotBrowseDirectories(path, text), errors.Is(e, errOutputTooLarge)})
 }
 func (a *App) restore(w http.ResponseWriter, r *http.Request) {
 	if e := a.post(r); e != nil {
@@ -1090,6 +1112,7 @@ func main() {
 	m.HandleFunc("/webdav/test", a.auth(a.testDAV))
 	m.HandleFunc("/assets/dav.js", a.auth(davScript))
 	m.HandleFunc("/assets/live-refresh.js", a.auth(liveRefreshScript))
+	m.HandleFunc("/assets/submit-guard.js", a.auth(submitGuardScript))
 	m.HandleFunc("/measure", a.auth(a.measure))
 	m.HandleFunc("/remove", a.auth(a.remove))
 	m.HandleFunc("/pause", a.auth(a.pause))

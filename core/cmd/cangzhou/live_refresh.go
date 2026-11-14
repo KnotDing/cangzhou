@@ -20,10 +20,11 @@ const liveRefreshJS = `"use strict";
       document.querySelectorAll("[data-live-region][id]").forEach(current => {
         const replacement = next.getElementById(current.id);
         if (!replacement || replacement.innerHTML === current.innerHTML) return;
-        if (current.contains(document.activeElement) || current.querySelector("details[open]")) { deferred = true; return; }
+        if (current.contains(document.activeElement) || current.querySelector("details[open], form[data-submitting]") || current.closest("form[data-submitting]")) { deferred = true; return; }
         current.replaceChildren(...Array.from(replacement.childNodes, node => document.importNode(node, true)));
       });
       document.querySelectorAll("[data-live-disabled][id]").forEach(current => {
+        if (current.closest("form[data-submitting]") || current.querySelector("form[data-submitting]")) { deferred = true; return; }
         const replacement = next.getElementById(current.id);
         if (replacement) {
           current.disabled = replacement.disabled;
