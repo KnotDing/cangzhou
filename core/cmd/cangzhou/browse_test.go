@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,27 @@ func TestSnapshotBrowseDirectories(t *testing.T) {
 	for _, p := range []string{"../x", "a/../x", "/absolute", "a//b", "a\\b", "x\ny"} {
 		if _, ok := snapshotBrowsePath(p); ok {
 			t.Errorf("accepted invalid path %q", p)
+		}
+	}
+}
+
+func TestSnapshotBrowseFilesAndSpecialNames(t *testing.T) {
+	output := "-rw-r--r--            4 2026-11-14 10:28:25 CST ff2652f8d47820026d9fe10bfd104c3b    leading space.txt\n" +
+		"lrwxrwxrwx            0 2026-11-14 10:28:25 CST ff2652f8d47820026d9fe10bfd104c3b   link\n"
+	got := snapshotBrowseEntries("folder", output)
+	if len(got) != 1 || got[0].Name != " leading space.txt" || got[0].Path != "folder/ leading space.txt" || got[0].IsDir {
+		t.Fatalf("unexpected files: %+v", got)
+	}
+}
+
+func TestSelectedSnapshotPaths(t *testing.T) {
+	got, ok := selectedSnapshotPaths([]string{"a-b", "a/x", "a", "a/y/z", "a", "other/file"})
+	if !ok || !reflect.DeepEqual(got, []string{"a", "a-b", "other/file"}) {
+		t.Fatalf("overlap: %v %v", got, ok)
+	}
+	for _, input := range [][]string{nil, {""}, {"../x"}, {"/absolute"}, {"a/../x"}, {"a\nb"}} {
+		if _, ok := selectedSnapshotPaths(input); ok {
+			t.Errorf("accepted invalid selection %q", input)
 		}
 	}
 }

@@ -459,22 +459,47 @@ func (a *App) snapshots(w http.ResponseWriter, r *http.Request) {
 	}{s, a.csrf, cfg})
 }
 func (a *App) browse(w http.ResponseWriter, r *http.Request) {
-	cfg, e := a.acquire("浏览快照", r.URL.Query().Get("job"))
+	a.browseSnapshot(w, r, false)
+}
+func (a *App) offlineBrowse(w http.ResponseWriter, r *http.Request) {
+	a.browseSnapshot(w, r, true)
+}
+func (a *App) browseSnapshot(w http.ResponseWriter, r *http.Request, offline bool) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "请求方法不支持", http.StatusMethodNotAllowed)
+		return
+	}
+	job := r.URL.Query().Get("job")
+	if offline {
+		job = ""
+	}
+	cfg, e := a.acquire("浏览快照", job)
 	if e != nil {
-		http.Redirect(w, r, base+"/", http.StatusSeeOther)
+		http.Error(w, "已有任务运行或任务不存在", http.StatusConflict)
 		return
 	}
 	defer a.release("")
-	s, e := a.list(cfg)
-	if e != nil {
-		http.Error(w, e.Error(), 500)
-		return
+	var snapshots []Snapshot
+	if offline {
+		a.mu.Lock()
+		if a.offline != nil {
+			cfg = a.offline.Cfg
+			snapshots = append(snapshots, a.offline.Snapshots...)
+		}
+		a.mu.Unlock()
+	} else {
+		snapshots, e = a.list(cfg)
+		if e != nil {
+			http.Error(w, e.Error(), 500)
+			return
+		}
 	}
 	id := r.URL.Query().Get("id")
 	found := false
-	for _, v := range s {
+	for _, v := range snapshots {
 		if v.Root.Obj == id {
 			found = true
+			break
 		}
 	}
 	if !found || !objectID.MatchString(id) {
@@ -499,19 +524,22 @@ func (a *App) browse(w http.ResponseWriter, r *http.Request) {
 	}
 	text := string(out)
 	if errors.Is(e, errOutputTooLarge) {
-		// A partial final line must never be interpreted as a complete directory name.
 		if i := strings.LastIndexByte(text, '\n'); i >= 0 {
 			text = text[:i+1]
 		} else {
 			text = ""
 		}
 	}
+	browseURL, restoreURL, backURL, key := base+"/browse", base+"/restore", base+"/snapshots?job="+url.QueryEscape(cfg.ID), "job:"+cfg.ID+":"+id
+	if offline {
+		browseURL, restoreURL, backURL, key = base+"/offline/browse", base+"/offline/restore", base+"/offline", "offline:"+cfg.ID+":"+id
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = browsePage.Execute(w, struct {
-		JobID, ID, Path, Parent, Text string
-		Directories                   []browseDirectory
-		Truncated                     bool
-	}{cfg.ID, id, path, snapshotBrowseParent(path), text, snapshotBrowseDirectories(path, text), errors.Is(e, errOutputTooLarge)})
+		JobID, ID, Path, Parent, Text, CSRF, BrowseURL, RestoreURL, BackURL, Key string
+		Entries                                                                  []browseEntry
+		Truncated                                                                bool
+	}{cfg.ID, id, path, snapshotBrowseParent(path), text, a.csrf, browseURL, restoreURL, backURL, key, snapshotBrowseEntries(path, text), errors.Is(e, errOutputTooLarge)})
 }
 func (a *App) restore(w http.ResponseWriter, r *http.Request) {
 	if e := a.post(r); e != nil {
@@ -536,6 +564,17 @@ func (a *App) restore(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "快照无效", 400)
 		return
 	}
+	var selected []string
+	if r.PostForm.Get("selection") == "1" {
+		ctx, cancel := context.WithTimeout(a.ctx, 2*time.Minute)
+		selected, e = a.validateSelection(ctx, cfg, id, r.PostForm["selected"])
+		cancel()
+		if e != nil {
+			a.release("")
+			http.Error(w, "无法恢复所选项目："+e.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	parent, e := os.MkdirTemp(filepath.Join(a.dir, "restores"), "restore-")
 	if e != nil {
 		a.release(e.Error())
@@ -548,7 +587,12 @@ func (a *App) restore(w http.ResponseWriter, r *http.Request) {
 		defer a.wg.Done()
 		ctx, cancel := context.WithTimeout(a.ctx, 72*time.Hour)
 		defer cancel()
-		_, e := a.run(ctx, cfg, "restore", "--no-overwrite-files", "--no-overwrite-directories", "--no-overwrite-symlinks", id, dest)
+		var e error
+		if selected != nil {
+			e = a.restoreSelected(ctx, cfg, id, dest, selected)
+		} else {
+			_, e = a.run(ctx, cfg, "restore", "--no-overwrite-files", "--no-overwrite-directories", "--no-overwrite-symlinks", id, dest)
+		}
 		if e != nil {
 			a.release("恢复失败：" + e.Error())
 		} else if e = writeFile(filepath.Join(parent, ".complete"), []byte("ok")); e != nil {
@@ -1105,6 +1149,7 @@ func main() {
 	m.HandleFunc("/offline", a.auth(a.offlinePage))
 	m.HandleFunc("/offline/open", a.auth(a.offlineOpen))
 	m.HandleFunc("/offline/restore", a.auth(a.offlineRestore))
+	m.HandleFunc("/offline/browse", a.auth(a.offlineBrowse))
 	m.HandleFunc("/offline/close", a.auth(a.offlineClose))
 	m.HandleFunc("/webdav", a.auth(a.webdav))
 	m.HandleFunc("/webdav/save", a.auth(a.saveDAV))
@@ -1113,6 +1158,7 @@ func main() {
 	m.HandleFunc("/assets/dav.js", a.auth(davScript))
 	m.HandleFunc("/assets/live-refresh.js", a.auth(liveRefreshScript))
 	m.HandleFunc("/assets/submit-guard.js", a.auth(submitGuardScript))
+	m.HandleFunc("/assets/snapshot-selection.js", a.auth(snapshotSelectionScript))
 	m.HandleFunc("/measure", a.auth(a.measure))
 	m.HandleFunc("/remove", a.auth(a.remove))
 	m.HandleFunc("/pause", a.auth(a.pause))

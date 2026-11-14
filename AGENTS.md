@@ -2,7 +2,7 @@
 
 ## 项目范围
 
-藏舟是 fnOS 原生加密备份应用。源端运行本应用，通过 Kopia 将快照存放到 WebDAV 或 SFTP 仓库。当前发布版本为 0.4.7，FPK 面向 Linux x86-64，最低 fnOS 版本以发布包的 `manifest` 为准。根 README 面向使用者，版本测试说明保存在 `releases/<版本>/README.md`。
+藏舟是 fnOS 原生加密备份应用。源端运行本应用，通过 Kopia 将快照存放到 WebDAV 或 SFTP 仓库。当前发布版本为 0.4.8，FPK 面向 Linux x86-64，最低 fnOS 版本以发布包的 `manifest` 为准。根 README 面向使用者，版本测试说明保存在 `releases/<版本>/README.md`。
 
 当前源码在 `core/`；`core/cmd/cangzhou/` 是 Go 服务、HTML 模板和内嵌 JavaScript，`core/internal/authority/` 管理已授权路径检查。`core/vendor/` 是已固定依赖。`package/` 和 `source/` 是早期 0.0.2 权限诊断实验，不是当前发布模板。当前 FPK 模板在 `packaging/fnos/`；`scripts/build-fpk.sh` 从干净的 Git 提交构建；`dist/`、`releases/` 中的历史版本是留存产物，避免原地改写。
 

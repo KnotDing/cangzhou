@@ -63,6 +63,8 @@ func TestOfflineRepositoryRealKopia(t *testing.T) {
 	os.MkdirAll(data, 0700)
 	os.MkdirAll(filepath.Join(data, "restores"), 0700)
 	os.WriteFile(filepath.Join(source, "a.txt"), []byte("offline test"), 0600)
+	os.MkdirAll(filepath.Join(source, "nested"), 0700)
+	os.WriteFile(filepath.Join(source, "nested", "selected.txt"), []byte("selected offline"), 0600)
 	cfgPath := filepath.Join(root, "config")
 	env := append(os.Environ(), "KOPIA_PASSWORD=test-password-123", "KOPIA_CONFIG_PATH="+cfgPath, "KOPIA_LOG_DIR="+filepath.Join(root, "logs"), "KOPIA_CACHE_DIRECTORY="+filepath.Join(root, "cache"))
 	run := func(args ...string) {
@@ -104,6 +106,30 @@ func TestOfflineRepositoryRealKopia(t *testing.T) {
 	}
 	open("directory", repo)
 	id := a.offline.Snapshots[0].Root.Obj
+	browseWriter := httptest.NewRecorder()
+	a.offlineBrowse(browseWriter, httptest.NewRequest("GET", "/offline/browse?id="+id, nil))
+	if browseWriter.Code != 200 || !strings.Contains(browseWriter.Body.String(), "nested") {
+		t.Fatalf("offline browse: %d %s", browseWriter.Code, browseWriter.Body.String())
+	}
+	selected := url.Values{"csrf": {"token"}, "id": {id}, "selection": {"1"}, "selected": {"nested/selected.txt"}}
+	selectedReq := httptest.NewRequest("POST", "/offline/restore", strings.NewReader(selected.Encode()))
+	selectedReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	selectedWriter := httptest.NewRecorder()
+	a.offlineRestore(selectedWriter, selectedReq)
+	if selectedWriter.Code != 303 {
+		t.Fatalf("offline selected: %d %s", selectedWriter.Code, selectedWriter.Body.String())
+	}
+	a.wg.Wait()
+	if len(a.restores()) != 1 {
+		t.Fatal("offline selection incomplete", a.message)
+	}
+	restored := filepath.Join(data, "restores", a.restores()[0], "files")
+	if got, err := os.ReadFile(filepath.Join(restored, "nested", "selected.txt")); err != nil || string(got) != "selected offline" {
+		t.Fatalf("offline content: %q %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(restored, "a.txt")); !os.IsNotExist(err) {
+		t.Fatalf("unselected file restored: %v", err)
+	}
 	v := url.Values{"csrf": {"token"}, "id": {id}}
 	r := httptest.NewRequest("POST", "/offline/restore", strings.NewReader(v.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -113,7 +139,7 @@ func TestOfflineRepositoryRealKopia(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	a.wg.Wait()
-	if len(a.restores()) != 1 {
+	if len(a.restores()) != 2 {
 		t.Fatal("restore not completed", a.message)
 	}
 	closeRepo()

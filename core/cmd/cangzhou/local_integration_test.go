@@ -33,8 +33,23 @@ func TestRealKopiaLocalRepository(t *testing.T) {
 	if e := os.WriteFile(filepath.Join(src, "子目录", "nested.txt"), []byte("nested data"), 0600); e != nil {
 		t.Fatal(e)
 	}
+	if e := os.Mkdir(filepath.Join(src, "另一个"), 0700); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(filepath.Join(src, "另一个", "second.txt"), []byte("second data"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(filepath.Join(src, "not-selected.txt"), []byte("private"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.Symlink("a.txt", filepath.Join(src, "a-link")); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.Mkdir(filepath.Join(dir, "restores"), 0700); e != nil {
+		t.Fatal(e)
+	}
 	id := "0123456789abcdef"
-	a := &App{dir: dir, kopia: binary, roots: []string{src}, ctx: context.Background(), jobs: []Config{{ID: id, Name: "local", Source: src, RepoPassword: "test-password-123", TrackingSince: time.Now()}}, proxyErrors: map[string]string{}}
+	a := &App{dir: dir, kopia: binary, csrf: "token", roots: []string{src}, ctx: context.Background(), jobs: []Config{{ID: id, Name: "local", Source: src, RepoPassword: "test-password-123", TrackingSince: time.Now()}}, proxyErrors: map[string]string{}}
 	state, e := a.prepareJob(id)
 	if e != nil {
 		t.Fatal(e)
@@ -71,6 +86,41 @@ func TestRealKopiaLocalRepository(t *testing.T) {
 	}
 	if w := browse("../outside"); w.Code != 400 {
 		t.Fatalf("traversal accepted: %d", w.Code)
+	}
+	selected := func(paths ...string) *httptest.ResponseRecorder {
+		v := url.Values{"csrf": {"token"}, "job": {id}, "id": {root}, "selection": {"1"}, "selected": paths}
+		r := httptest.NewRequest("POST", "/restore", strings.NewReader(v.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		a.restore(w, r)
+		return w
+	}
+	if w := selected("../outside"); w.Code != 400 {
+		t.Fatalf("accepted traversal: %d", w.Code)
+	}
+	if w := selected("not-present.txt"); w.Code != 400 {
+		t.Fatalf("accepted nonexistent entry: %d", w.Code)
+	}
+	if w := selected("a-link"); w.Code != 400 {
+		t.Fatalf("accepted symlink: %d", w.Code)
+	}
+	if w := selected("a.txt", "子目录", "子目录/nested.txt", "另一个/second.txt"); w.Code != 303 {
+		t.Fatalf("selected restore: %d %s", w.Code, w.Body.String())
+	}
+	a.wg.Wait()
+	restores := a.restores()
+	if len(restores) != 1 {
+		t.Fatalf("selected restore incomplete: %s", a.message)
+	}
+	restored := filepath.Join(dir, "restores", restores[0], "files")
+	for path, want := range map[string]string{"a.txt": "test data", "子目录/nested.txt": "nested data", "另一个/second.txt": "second data"} {
+		data, err := os.ReadFile(filepath.Join(restored, path))
+		if err != nil || string(data) != want {
+			t.Fatalf("restored %s: %q %v", path, data, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(restored, "not-selected.txt")); !os.IsNotExist(err) {
+		t.Fatalf("unselected file restored: %v", err)
 	}
 	var live backupProgress
 	_, progressErr := a.runWithProgress(context.Background(), j, func(line string) { parseProgress(line, &live) }, "snapshot", "create", "--json", "--progress", "--fail-fast", "--", src)

@@ -286,19 +286,35 @@ func (a *App) offlineRestore(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "快照无效", 400)
 		return
 	}
+	cfg := session.Cfg
+	var selected []string
+	if r.PostForm.Get("selection") == "1" {
+		ctx, cancel := context.WithTimeout(a.ctx, 2*time.Minute)
+		selected, e = a.validateSelection(ctx, cfg, id, r.PostForm["selected"])
+		cancel()
+		if e != nil {
+			a.release("")
+			http.Error(w, "无法恢复所选项目："+e.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	parent, e := os.MkdirTemp(filepath.Join(a.dir, "restores"), "restore-")
 	if e != nil {
 		a.release("")
 		http.Error(w, "无法创建恢复目录", 500)
 		return
 	}
-	cfg := session.Cfg
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
 		ctx, cancel := context.WithTimeout(a.ctx, 72*time.Hour)
 		defer cancel()
-		_, e := a.run(ctx, cfg, "restore", "--no-overwrite-files", "--no-overwrite-directories", "--no-overwrite-symlinks", id, filepath.Join(parent, "files"))
+		var e error
+		if selected != nil {
+			e = a.restoreSelected(ctx, cfg, id, filepath.Join(parent, "files"), selected)
+		} else {
+			_, e = a.run(ctx, cfg, "restore", "--no-overwrite-files", "--no-overwrite-directories", "--no-overwrite-symlinks", id, filepath.Join(parent, "files"))
+		}
 		if e == nil {
 			e = writeFile(filepath.Join(parent, ".complete"), []byte("ok"))
 		}

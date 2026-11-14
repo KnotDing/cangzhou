@@ -1,5 +1,5 @@
 appname=cangzhou
-version=0.4.7
+version=0.4.8
 display_name=藏舟
 desc=加密备份至远程路径的测试版应用
 platform=x86
