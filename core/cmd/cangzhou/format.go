@@ -16,6 +16,8 @@ func statusLabel(s string) string {
 		return "成功"
 	case "failed":
 		return "失败"
+	case "cancelled":
+		return "已取消"
 	case "interrupted":
 		return "状态未确认"
 	default:

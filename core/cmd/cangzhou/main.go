@@ -92,6 +92,9 @@ type App struct {
 	proxies                                          map[string]*davProxy
 	proxyErrors                                      map[string]string
 	progress                                         *backupProgress
+	backupCancel                                     context.CancelFunc
+	backupRunID                                      string
+	backupCancelRequested                            bool
 	offline                                          *offlineSession
 	pendingImport                                    *importDocument
 	globalUploadKiB                                  int
@@ -356,18 +359,30 @@ func (a *App) startBackupWithTrigger(id, trigger string) error {
 		a.release("记录运行状态失败：" + e.Error())
 		return e
 	}
+	ctx, cancel := context.WithTimeout(a.ctx, 72*time.Hour)
+	a.backupCancel = cancel
+	a.backupRunID = random(16)
+	a.backupCancelRequested = false
 	a.mu.Unlock()
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		ctx, cancel := context.WithTimeout(a.ctx, 72*time.Hour)
 		defer cancel()
 		out, err := a.runWithProgress(ctx, cfg, func(line string) { a.updateBackupProgress(id, line) }, "snapshot", "create", "--json", "--progress", "--fail-fast", "--", check.Path)
+		a.mu.Lock()
+		requested := a.backupCancelRequested
+		a.backupCancel = nil
+		a.backupRunID = ""
+		a.backupCancelRequested = false
+		a.mu.Unlock()
 		msg := "任务「" + cfg.Name + "」备份完成"
 		status := "success"
 		detail := ""
 		if err != nil {
-			if errors.Is(ctx.Err(), context.Canceled) {
+			if errors.Is(ctx.Err(), context.Canceled) && requested && a.ctx.Err() == nil {
+				status = "cancelled"
+				detail = "已停止备份；快照可能已提交，请查看历史快照确认。"
+			} else if errors.Is(ctx.Err(), context.Canceled) {
 				status = "interrupted"
 				detail = "服务停止，运行结果未确认；请检查快照"
 			} else {
@@ -994,7 +1009,8 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 		Total             int
 		Query             string
 		New               bool
-	}{a.roots, a.csrf, a.busy, a.visibleMessageLocked("task", ""), a.activity, elapsed(a.startedAt), jobs, davs, len(a.jobs), query, r.URL.Query().Get("new") == "1" || len(a.jobs) == 0}
+		BackupActive      bool
+	}{a.roots, a.csrf, a.busy, a.visibleMessageLocked("task", ""), a.activity, elapsed(a.startedAt), jobs, davs, len(a.jobs), query, r.URL.Query().Get("new") == "1" || len(a.jobs) == 0, strings.HasPrefix(a.activity, "执行备份：")}
 	a.mu.Unlock()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = page.Execute(w, data)
@@ -1020,15 +1036,21 @@ func (a *App) detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := struct {
-		Job      Config
-		CSRF     string
-		Busy     bool
-		Activity string
-		Elapsed  int
-		Message  string
-		Roots    []string
-		Progress *progressView
-	}{sanitized(j), a.csrf, a.busy, a.activity, elapsed(a.startedAt), a.visibleMessageLocked("task", id), a.roots, a.progressFor(id)}
+		Job             Config
+		CSRF            string
+		Busy            bool
+		Activity        string
+		Elapsed         int
+		Message         string
+		Roots           []string
+		Progress        *progressView
+		CancelRun       string
+		CancelRequested bool
+	}{sanitized(j), a.csrf, a.busy, a.activity, elapsed(a.startedAt), a.visibleMessageLocked("task", id), a.roots, a.progressFor(id), "", false}
+	if a.activeJob == id && a.backupCancel != nil {
+		data.CancelRun = a.backupRunID
+		data.CancelRequested = a.backupCancelRequested
+	}
 	a.mu.Unlock()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = detailPage.Execute(w, data)
@@ -1225,6 +1247,7 @@ func main() {
 	m.HandleFunc("/measure", a.auth(a.measure))
 	m.HandleFunc("/remove", a.auth(a.remove))
 	m.HandleFunc("/pause", a.auth(a.pause))
+	m.HandleFunc("/backup/cancel", a.auth(a.cancelBackup))
 	m.HandleFunc("/snapshots", a.auth(a.snapshots))
 	m.HandleFunc("/history", a.auth(a.backupHistory))
 	m.HandleFunc("/browse", a.auth(a.browse))
