@@ -44,20 +44,20 @@ jobs:
             if [ "$remote_sha" = "$local_sha" ] && curl --fail --silent --show-error --location \
                 "https://api.github.com/repos/KnotDing/cangzhou/releases/tags/$RELEASE_TAG" -o "$RUNNER_TEMP/release.json"; then
               ok=true
-              for name in "cangzhou-$version-x86.fpk" SHA256SUMS; do
+              for name in "cangzhou-$version-x86.fpk" "cangzhou-$version-arm.fpk" SHA256SUMS; do
                 url="$(jq -er --arg name "$name" '.assets[] | select(.name == $name) | .browser_download_url' "$RUNNER_TEMP/release.json")" || { ok=false; break; }
                 curl --fail --silent --show-error --location "$url" -o "artifacts/$name" || { ok=false; break; }
               done
               if [ "$ok" = true ] && python3 - "$version" <<'PYCODE'
           import pathlib, re, sys
           v=sys.argv[1]; entries=pathlib.Path('artifacts/SHA256SUMS').read_text().splitlines()
-          want={f'cangzhou-{v}-x86.fpk'}
+          want={f'cangzhou-{v}-x86.fpk', f'cangzhou-{v}-arm.fpk'}
           parsed=[]
           for line in entries:
               m=re.fullmatch(r'([0-9a-f]{64}) [ *]([^/\\]+)',line)
               if not m: raise SystemExit('invalid checksum list')
               parsed.append(m.group(2))
-          if len(parsed)!=1 or set(parsed)!=want: raise SystemExit('unexpected checksum entries')
+          if len(parsed)!=2 or set(parsed)!=want: raise SystemExit('unexpected checksum entries')
           PYCODE
               then
                 if (cd artifacts && sha256sum --check SHA256SUMS); then available=true; break; fi
@@ -103,7 +103,10 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           FNPACK: ${{ github.workspace }}/tools/fnpack
           KOPIA: ${{ github.workspace }}/tools/kopia
-        run: ./scripts/build-fpk.sh
+        run: |
+          ./scripts/build-fpk.sh
+          CANGZHOU_ARCH=arm KOPIA="$GITHUB_WORKSPACE/tools/kopia-arm64" ./scripts/build-fpk.sh
+          (version="$(sed -n 's/^version=//p' packaging/fnos/manifest)"; cd artifacts && sha256sum "cangzhou-$version-x86.fpk" "cangzhou-$version-arm.fpk" > SHA256SUMS && sha256sum -c SHA256SUMS)
       - name: Publish fallback assets
         env:
           GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}

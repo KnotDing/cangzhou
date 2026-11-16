@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pinned, verified Linux x86-64 tools for CI. No credentials are required.
+# Pinned Linux x86-64 fnpack and Kopia binaries for both target architectures.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 tools_dir="${CANGZHOU_TOOLS_DIR:-$root/tools}"
@@ -17,3 +17,9 @@ mkdir -p "$tmp/kopia-extract"
 tar -xzf "$tmp/kopia.tar.gz" -C "$tmp/kopia-extract" 'kopia-0.23.1-linux-x64/kopia'
 install -m 755 "$tmp/fnpack" "$tools_dir/fnpack"
 install -m 755 "$tmp/kopia-extract/kopia-0.23.1-linux-x64/kopia" "$tools_dir/kopia"
+
+curl --fail --location --silent --show-error --retry 3 \
+  'https://github.com/kopia/kopia/releases/download/v0.23.1/kopia-0.23.1-linux-arm64.tar.gz' -o "$tmp/kopia-arm64.tar.gz"
+printf '%s  %s\n' 'a4ffbc019e0b0f932e2632054e73ec521dc1e80172a00095369c53ecf4e5a6cb' "$tmp/kopia-arm64.tar.gz" | sha256sum -c -
+tar -xzf "$tmp/kopia-arm64.tar.gz" -C "$tmp/kopia-extract" 'kopia-0.23.1-linux-arm64/kopia'
+install -m 755 "$tmp/kopia-extract/kopia-0.23.1-linux-arm64/kopia" "$tools_dir/kopia-arm64"

@@ -32,14 +32,14 @@
 
 ### 系统要求
 
-- **fnOS 1.1.3100 或以上，x86-64 设备**；通过飞牛应用窗口访问，需要管理员身份。
+- **fnOS 1.1.3100 或以上，x86-64 或 ARM64 设备**；通过飞牛应用窗口访问，需要管理员身份。
 - 可访问的 WebDAV 或 SFTP 服务，以及具有相应权限的目标目录。
 - 飞牛为藏舟授予的备份源目录访问权限。
 
 ### 安装
 
-1. 从 [GitHub Releases](https://github.com/KnotDing/cangzhou/releases) 或 [Gitea 发布页](https://gitea.knotding.com/knot/cangzhou/releases)下载适用于设备的 FPK 和同一发布页的 `SHA256SUMS`。
-2. 在下载目录核对文件：Linux 使用 `sha256sum -c SHA256SUMS`，macOS 使用 `shasum -a 256 -c SHA256SUMS`。两个平台可能分别构建安装包，请使用下载来源对应的校验文件。
+1. 从 [GitHub Releases](https://github.com/KnotDing/cangzhou/releases) 或 [Gitea 发布页](https://gitea.knotding.com/knot/cangzhou/releases)下载适用于设备的 FPK（`-x86.fpk` 对应 x86-64，`-arm.fpk` 对应 ARM64）和同一发布页的 `SHA256SUMS`。ARM64 包从 0.4.10 开始提供。
+2. 在下载目录核对文件：只下载了一个架构时，Linux 使用 `grep "  文件名.fpk$" SHA256SUMS | sha256sum -c -`，macOS 使用 `grep "  文件名.fpk$" SHA256SUMS | shasum -a 256 -c -`，将文件名替换为实际下载的 FPK 文件名。两个平台可能分别构建安装包，请使用下载来源对应的校验文件。
 3. 在飞牛应用中心手动安装 FPK。升级时请先等待正在运行的任务结束。
 4. 在应用设置中授权需要备份的源目录，然后以管理员身份打开藏舟。
 
@@ -137,7 +137,7 @@ KOPIA=/absolute/path/to/verified-linux-x86_64-kopia \
   ./scripts/build-fpk.sh
 ```
 
-产物位于 `artifacts/`。构建需提供经核验的 Linux x86-64 Kopia 和与构建机器匹配的 `fnpack`；当前发布使用 Kopia 0.23.1 和 fnpack 1.2.3。Linux x86-64 环境可使用 `scripts/fetch-ci-tools.sh` 获取并校验固定版本工具。源码归档不包含 Kopia 二进制。
+构建 ARM64 包时，将 `KOPIA` 指向经核验的 Linux ARM64 Kopia，并设置 `CANGZHOU_ARCH=arm`；默认值 `x86` 生成 x86-64 包。产物位于 `artifacts/`，每次构建生成当前包的 `SHA256SUMS`，连续构建两种架构时需重新生成包含两个包的校验文件。构建机的 `fnpack` 必须与构建机架构匹配；当前使用 Kopia 0.23.1 和 fnpack 1.2.3。Linux x86-64 环境可使用 `scripts/fetch-ci-tools.sh` 获取并校验固定版本工具。源码归档不包含 Kopia 二进制。
 
 更多细节见 [开发指引](AGENTS.md)和 [CI 与发布说明](docs/ci.md)。
 

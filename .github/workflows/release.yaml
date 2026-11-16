@@ -39,7 +39,10 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
           FNPACK: ${{ github.workspace }}/tools/fnpack
           KOPIA: ${{ github.workspace }}/tools/kopia
-        run: ./scripts/build-fpk.sh
+        run: |
+          ./scripts/build-fpk.sh
+          CANGZHOU_ARCH=arm KOPIA="$GITHUB_WORKSPACE/tools/kopia-arm64" ./scripts/build-fpk.sh
+          (version="$(sed -n 's/^version=//p' packaging/fnos/manifest)"; cd artifacts && sha256sum "cangzhou-$version-x86.fpk" "cangzhou-$version-arm.fpk" > SHA256SUMS && sha256sum -c SHA256SUMS)
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,7 +53,7 @@ jobs:
           version="${RELEASE_TAG#v}"
           notes="releases/${version}/README.md"
           test -s "$notes"
-          assets=("artifacts/cangzhou-${version}-x86.fpk" artifacts/SHA256SUMS)
+          assets=("artifacts/cangzhou-${version}-x86.fpk" "artifacts/cangzhou-${version}-arm.fpk" artifacts/SHA256SUMS)
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
             gh release edit "$RELEASE_TAG" --notes-file "$notes"

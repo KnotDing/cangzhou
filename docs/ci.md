@@ -1,13 +1,16 @@
 # CI 与发布
 
-GitHub 和 Gitea 分别运行各自工作流，默认分支为 `main`。向 `main` 推送或发起 Pull Request 时，两边的测试工作流会检查 Go 代码、执行竞态和实际 Kopia 集成测试，并构建、检查 x86-64 FPK。GitHub 同时保存短期测试工件；这些工件不是正式发布。
+GitHub 和 Gitea 分别运行各自工作流，默认分支为 `main`。向 `main` 推送或发起 Pull Request 时，两边的测试工作流会检查 Go 代码、执行竞态和实际 Kopia 集成测试，并构建、检查 x86-64 和 ARM64 FPK。GitHub 同时保存短期测试工件；这些工件不是正式发布。
 
 ## 工具与构建
 
-`scripts/fetch-ci-tools.sh` 下载飞牛 fnpack 1.2.3 Linux x86-64 和 Kopia 0.23.1 Linux x86-64，校验脚本内固定的 SHA-256 后放到 `tools/`。`scripts/build-fpk.sh` 使用 `packaging/fnos/` 和当前干净的 Git 提交构建，检查包内 manifest、UI 配置和 Linux x86-64 ELF 程序，输出：
+`scripts/fetch-ci-tools.sh` 下载飞牛 fnpack 1.2.3 Linux x86-64 和 Kopia 0.23.1 Linux x86-64 和 ARM64，校验脚本内固定的 SHA-256 后放到 `tools/`。`scripts/build-fpk.sh` 使用 `packaging/fnos/` 和当前干净的 Git 提交构建，检查包内 manifest、UI 配置和与目标架构相符的 64 位 ELF 程序，输出：
 
 - `artifacts/cangzhou-<版本>-x86.fpk`
+- `artifacts/cangzhou-<版本>-arm.fpk`
 - `artifacts/SHA256SUMS`
+
+构建脚本通过 `CANGZHOU_ARCH=x86`（默认）或 `arm` 选择目标，`KOPIA` 必须指向对应架构的可执行文件。单次构建会覆盖 `SHA256SUMS`；CI 在两次构建后重新生成包含两个包的校验文件。集成测试在 x86-64 runner 上使用 x86-64 Kopia，ARM64 包的检查是交叉编译和静态包检查，并非 ARM 设备上的运行测试。
 
 源码可从 GitHub 或 Gitea 发布页的平台自动生成归档下载，归档对应版本标签且不含 Kopia 二进制。公开仓库不会跟踪 `tools/`、`artifacts/`、FPK、任务数据或凭据。`packaging/fnos/manifest` 是当前打包版本来源；运行时产生的数据不会纳入构建。
 
