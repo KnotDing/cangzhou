@@ -17,7 +17,7 @@ func TestLiveRefreshRegionsOnBusyPages(t *testing.T) {
 	}{
 		{"home", "/?new=1", func(w *httptest.ResponseRecorder) { a.home(w, httptest.NewRequest("GET", "/?new=1", nil)) }, []string{"live-home-status", "live-home-message", "live-home-jobs", "live-setup-fieldset", "live-setup-submit"}},
 		{"detail", "/task", func(w *httptest.ResponseRecorder) { a.detail(w, httptest.NewRequest("GET", "/task?job="+j.ID, nil)) }, []string{"live-detail-status", "live-detail-message", "live-detail-progress", "live-detail-summary"}},
-		{"remote", "/webdav", func(w *httptest.ResponseRecorder) { a.webdav(w, httptest.NewRequest("GET", "/webdav?new=1", nil)) }, []string{"live-remote-message", "live-remote-fieldset", "live-remote-list"}},
+		{"remote", "/webdav", func(w *httptest.ResponseRecorder) { a.webdav(w, httptest.NewRequest("GET", "/webdav?new=1", nil)) }, []string{"live-remote-message", "live-remote-save", "live-remote-list"}},
 		{"offline", "/offline", func(w *httptest.ResponseRecorder) { a.offlinePage(w, httptest.NewRequest("GET", "/offline", nil)) }, []string{"live-offline-message", "live-offline-local", "live-offline-upload"}},
 		{"recoveries", "/recoveries", func(w *httptest.ResponseRecorder) { a.recoveries(w, httptest.NewRequest("GET", "/recoveries", nil)) }, []string{"live-recoveries-message", "live-recoveries-list"}},
 	} {
@@ -41,5 +41,26 @@ func TestLiveRefreshRegionsOnBusyPages(t *testing.T) {
 	a.detail(w, httptest.NewRequest("GET", "/task?job="+j.ID, nil))
 	if !strings.Contains(w.Body.String(), `id="live-detail-progress"`) || !strings.Contains(w.Body.String(), `data-live-busy="false"`) {
 		t.Fatal("idle detail lacks update target")
+	}
+}
+
+func TestRemoteFormRemainsEditableDuringBackup(t *testing.T) {
+	a := &App{dir: t.TempDir(), csrf: "token", busy: true, activity: "执行备份", startedAt: time.Now()}
+	render := func() string {
+		w := httptest.NewRecorder()
+		a.webdav(w, httptest.NewRequest("GET", "/webdav?new=1", nil))
+		if w.Code != 200 {
+			t.Fatalf("status %d", w.Code)
+		}
+		return w.Body.String()
+	}
+	busy := render()
+	if strings.Contains(busy, `<fieldset disabled`) || strings.Contains(busy, `id="live-remote-fieldset"`) || !strings.Contains(busy, `id="live-remote-save" data-live-disabled type="submit" disabled`) || !strings.Contains(busy, `id="dav-test" type="button"`) {
+		t.Fatal("busy form should allow editing and testing while preventing save")
+	}
+	a.busy = false
+	idle := render()
+	if !strings.Contains(idle, `id="live-remote-save" data-live-disabled type="submit" >`) {
+		t.Fatal("save should become available when idle")
 	}
 }
