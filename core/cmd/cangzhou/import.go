@@ -69,6 +69,15 @@ func (a *App) importSettings(w http.ResponseWriter, r *http.Request) {
 	seen := map[string]bool{}
 	for _, x := range d.DAVs {
 		u, e := url.Parse(x.URL)
+		if x.Protocol == "local" {
+			_, localErr := localConnectionTarget(DAVConfig{URL: x.URL}, "")
+			if !validDAVID.MatchString(x.ID) || seen[x.ID] || strings.TrimSpace(x.Name) == "" || len(x.Name) > 120 || localErr != nil || x.User != "" || x.InsecureTLS {
+				http.Error(w, "本地存储位置无效或编号重复", 400)
+				return
+			}
+			seen[x.ID] = true
+			continue
+		}
 		if !validDAVID.MatchString(x.ID) || seen[x.ID] || strings.TrimSpace(x.Name) == "" || len(x.Name) > 120 || x.User == "" || e != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "sftp") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || x.InsecureTLS && u.Scheme != "https" || (x.Protocol != "" && x.Protocol != "webdav" && x.Protocol != "sftp") || (x.Protocol == "sftp") != (u.Scheme == "sftp") || (x.Protocol == "sftp" && (x.Host == "" || x.Port < 1 || x.Port > 65535 || x.KnownHosts == "" || !strings.HasPrefix(x.RemotePath, "/") || u.Host != net.JoinHostPort(x.Host, strconv.Itoa(x.Port)) || u.Path != x.RemotePath)) {
 			http.Error(w, "连接配置无效或编号重复", 400)
 			return
@@ -77,7 +86,7 @@ func (a *App) importSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	seen = map[string]bool{}
 	for _, x := range d.Jobs {
-		if !validJobID.MatchString(x.ID) || seen[x.ID] || strings.TrimSpace(x.Name) == "" || len(x.Name) > 120 || !filepath.IsAbs(x.Source) || (x.LocalPath != "" && (!filepath.IsAbs(x.LocalPath) || x.DAVID != "")) || x.IntervalHours < 0 || x.IntervalHours > 720 || x.UploadLimitKiB < 0 || x.UploadLimitKiB > maxUploadKiB {
+		if !validJobID.MatchString(x.ID) || seen[x.ID] || strings.TrimSpace(x.Name) == "" || len(x.Name) > 120 || !filepath.IsAbs(x.Source) || (x.LocalPath != "" && !filepath.IsAbs(x.LocalPath)) || x.IntervalHours < 0 || x.IntervalHours > 720 || x.UploadLimitKiB < 0 || x.UploadLimitKiB > maxUploadKiB {
 			http.Error(w, "任务配置无效或编号重复", 400)
 			return
 		}
@@ -155,7 +164,7 @@ func (a *App) applyImport(w http.ResponseWriter, r *http.Request) {
 		if private == "" {
 			private = d.PrivateKey
 		}
-		if secret == "" && private == "" {
+		if d.Protocol != "local" && secret == "" && private == "" {
 			a.release("")
 			http.Error(w, "请填写连接「"+d.Name+"」的密码或私钥", 400)
 			return
@@ -170,7 +179,7 @@ func (a *App) applyImport(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		d, ok := davMap[j.DAVID]
-		if j.LocalPath == "" && !ok {
+		if j.DAVID != "" && !ok || j.DAVID == "" && j.LocalPath == "" {
 			a.release("")
 			http.Error(w, "任务「"+j.Name+"」缺少关联的连接", 400)
 			return
@@ -184,9 +193,19 @@ func (a *App) applyImport(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "请填写任务「"+j.Name+"」的仓库密码", 400)
 			return
 		}
-		var target string
-		if j.LocalPath != "" {
-			target = j.LocalPath
+		var target, localPath string
+		if j.DAVID == "" {
+			localPath = j.LocalPath
+			target = localPath
+		} else if d.Protocol == "local" {
+			var err error
+			localPath, err = localConnectionTarget(d, j.TargetPath)
+			if err != nil {
+				a.release("")
+				http.Error(w, "目标子目录无效", 400)
+				return
+			}
+			target = localPath
 		} else {
 			u, _ := url.Parse(d.URL)
 			var err error
@@ -197,7 +216,7 @@ func (a *App) applyImport(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		jobs = append(jobs, Config{ID: j.ID, Name: j.Name, DAVID: d.ID, TargetPath: j.TargetPath, LocalPath: j.LocalPath, URL: target, User: d.User, WebDAVPassword: d.Password, RepoPassword: pw, Source: j.Source, IntervalHours: j.IntervalHours, UploadLimitKiB: j.UploadLimitKiB, Paused: j.Paused, InsecureTLS: d.InsecureTLS, ConnectionID: random(8)})
+		jobs = append(jobs, Config{ID: j.ID, Name: j.Name, DAVID: d.ID, TargetPath: j.TargetPath, LocalPath: localPath, URL: target, User: d.User, WebDAVPassword: d.Password, RepoPassword: pw, Source: j.Source, IntervalHours: j.IntervalHours, UploadLimitKiB: j.UploadLimitKiB, Paused: j.Paused, InsecureTLS: d.InsecureTLS, ConnectionID: random(8)})
 	}
 	a.wg.Add(1)
 	go a.connectImported(newDAV, jobs, skipped, davMap, r.PostForm.Get("import_global_limit") == "yes", doc.GlobalUploadKiB)

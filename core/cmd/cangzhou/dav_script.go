@@ -9,7 +9,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const output = document.getElementById("dav-test-result");
   if (!form || !button || !output) return;
   const protocol = document.getElementById("remote-protocol");
-  const switchMode = () => document.querySelectorAll("[data-remote]").forEach(el => { el.hidden = el.dataset.remote !== protocol.value; });
+  const switchMode = () => {
+    document.querySelectorAll("[data-remote]").forEach(el => {
+      el.hidden = !el.dataset.remote.split(" ").includes(protocol.value);
+      el.querySelectorAll("input, textarea, select").forEach(input => { input.disabled = el.hidden; });
+    });
+    form.querySelector('[name="user"]').required = protocol.value !== "local";
+    form.querySelector('[name="local_path"]').required = protocol.value === "local";
+  };
   if (protocol) { protocol.addEventListener("change", switchMode); switchMode(); }
   button.addEventListener("click", async () => {
     if (!form.reportValidity()) return;

@@ -240,7 +240,7 @@ func (a *App) visibleMessageLocked(scope, job string) string {
 }
 func activityScope(activity string) string {
 	switch activity {
-	case "更新 WebDAV 配置":
+	case "更新 WebDAV 配置", "更新存储位置":
 		return "remote"
 	case "恢复快照", "恢复离线快照":
 		return "recoveries"
@@ -737,6 +737,15 @@ func (a *App) setup(w http.ResponseWriter, r *http.Request) {
 			a.release("")
 			http.Error(w, e.Error(), 400)
 			return
+		}
+		if dav.Protocol == "local" {
+			localPath, e = localConnectionTarget(dav, targetPath)
+			if e != nil {
+				a.release("")
+				http.Error(w, e.Error(), 400)
+				return
+			}
+			target = localPath
 		}
 	}
 	cfg := Config{ID: random(8), Name: name, DAVID: davID, TargetPath: targetPath, LocalPath: localPath, URL: target, User: dav.User, WebDAVPassword: dav.Password, RepoPassword: pw, Source: source.Path, IntervalHours: hours, UploadLimitKiB: limit, TrackingSince: time.Now(), InsecureTLS: dav.InsecureTLS}

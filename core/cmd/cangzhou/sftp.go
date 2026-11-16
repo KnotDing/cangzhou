@@ -119,6 +119,11 @@ func testSFTP(ctx context.Context, d DAVConfig) error {
 }
 func (a *App) connectRemote(ctx context.Context, cfg *Config, d DAVConfig, mode string) (*davProxy, error) {
 	if cfg.LocalPath != "" {
+		if d.Protocol == "local" {
+			if e := a.prepareLocalTarget(d, *cfg, mode); e != nil {
+				return nil, e
+			}
+		}
 		_, e := a.checkLocalRepository(cfg.LocalPath, cfg.Source)
 		if e != nil {
 			return nil, e

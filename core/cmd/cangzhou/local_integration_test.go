@@ -53,11 +53,12 @@ func TestRealKopiaLocalRepository(t *testing.T) {
 		t.Fatal(e)
 	}
 	id := "0123456789abcdef"
-	a := &App{dir: dir, kopia: binary, csrf: "token", roots: []string{dir}, ctx: context.Background(), jobs: []Config{{ID: id, Name: "local", Source: src, LocalPath: repo, RepoPassword: "test-password-123", TrackingSince: time.Now()}}, proxyErrors: map[string]string{}}
+	a := &App{dir: dir, kopia: binary, csrf: "token", roots: []string{dir}, ctx: context.Background(), jobs: []Config{{ID: id, Name: "local", Source: src, LocalPath: repo, TargetPath: "repository", RepoPassword: "test-password-123", TrackingSince: time.Now()}}, proxyErrors: map[string]string{}}
 	if _, e = a.prepareJob(id); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = a.connectRemote(context.Background(), &a.jobs[0], DAVConfig{}, "create"); e != nil {
+	d := DAVConfig{Protocol: "local", URL: (&url.URL{Scheme: "file", Path: dir}).String()}
+	if _, e = a.connectRemote(context.Background(), &a.jobs[0], d, "create"); e != nil {
 		t.Fatalf("create: %v", e)
 	}
 	// Reconnect through a separate configuration, then check that a wrong
@@ -71,7 +72,7 @@ func TestRealKopiaLocalRepository(t *testing.T) {
 	if e = os.MkdirAll(filepath.Dir(p), 0700); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = a.connectRemote(context.Background(), &connected, DAVConfig{}, "connect"); e != nil {
+	if _, e = a.connectRemote(context.Background(), &connected, d, "connect"); e != nil {
 		t.Fatalf("connect existing: %v", e)
 	}
 	bad := connected
@@ -81,7 +82,7 @@ func TestRealKopiaLocalRepository(t *testing.T) {
 	if e = os.MkdirAll(filepath.Dir(p), 0700); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = a.connectRemote(context.Background(), &bad, DAVConfig{}, "connect"); e == nil {
+	if _, e = a.connectRemote(context.Background(), &bad, d, "connect"); e == nil {
 		t.Fatal("wrong password accepted")
 	}
 	a.jobs[0] = connected

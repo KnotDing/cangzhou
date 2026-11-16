@@ -29,6 +29,14 @@ func (a *App) findDAV(id string) (int, DAVConfig, bool) {
 }
 func cleanDAV(d DAVConfig) DAVConfig { d.Password = ""; d.PrivateKey = ""; return d }
 func parseDAV(r *http.Request, old DAVConfig) (DAVConfig, error) {
+	if r.PostForm.Get("protocol") == "local" {
+		name := strings.TrimSpace(r.PostForm.Get("name"))
+		path := strings.TrimSpace(r.PostForm.Get("local_path"))
+		if name == "" || len(name) > 120 || !filepath.IsAbs(path) {
+			return DAVConfig{}, errors.New("请填写名称和本地目录绝对路径")
+		}
+		return DAVConfig{ID: old.ID, Name: name, Protocol: "local", URL: (&url.URL{Scheme: "file", Path: filepath.Clean(path)}).String()}, nil
+	}
 	if r.PostForm.Get("protocol") == "sftp" {
 		return parseSFTP(r, old)
 	}
@@ -64,12 +72,20 @@ func (a *App) webdav(w http.ResponseWriter, r *http.Request) {
 		_, d, ok := a.findDAV(id)
 		if !ok {
 			a.mu.Unlock()
-			http.Error(w, "找不到 WebDAV 配置", 404)
+			http.Error(w, "找不到存储位置", 404)
 			return
 		}
 		edit = cleanDAV(d)
 	}
+	localPath := ""
+	if edit.Protocol == "local" {
+		if u, err := url.Parse(edit.URL); err == nil {
+			localPath = u.Path
+		}
+	}
 	data := struct {
+		Roots             []string
+		LocalPath         string
 		DAVs              []DAVConfig
 		Edit              DAVConfig
 		CSRF              string
@@ -77,7 +93,7 @@ func (a *App) webdav(w http.ResponseWriter, r *http.Request) {
 		Activity, Message string
 		Elapsed           int
 		New               bool
-	}{list, edit, a.csrf, a.busy, a.activity, a.visibleMessageLocked("remote", ""), elapsed(a.startedAt), r.URL.Query().Get("new") == "1" || len(list) == 0}
+	}{a.roots, localPath, list, edit, a.csrf, a.busy, a.activity, a.visibleMessageLocked("remote", ""), elapsed(a.startedAt), r.URL.Query().Get("new") == "1" || len(list) == 0}
 	a.mu.Unlock()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = davPage.Execute(w, data)
@@ -87,7 +103,7 @@ func (a *App) saveDAV(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, e.Error(), 400)
 		return
 	}
-	_, e := a.acquire("更新 WebDAV 配置", "")
+	_, e := a.acquire("更新存储位置", "")
 	if e != nil {
 		http.Redirect(w, r, base+"/webdav", 303)
 		return
@@ -100,7 +116,7 @@ func (a *App) saveDAV(w http.ResponseWriter, r *http.Request) {
 		a.mu.Unlock()
 		if !ok {
 			a.release("")
-			http.Error(w, "找不到 WebDAV 配置", 404)
+			http.Error(w, "找不到存储位置", 404)
 			return
 		}
 		old = d
@@ -110,6 +126,16 @@ func (a *App) saveDAV(w http.ResponseWriter, r *http.Request) {
 		a.release("")
 		http.Error(w, e.Error(), 400)
 		return
+	}
+	if d.Protocol == "local" {
+		u, _ := url.Parse(d.URL)
+		p, err := a.selectLocalRepository(u.Path, "")
+		if err != nil {
+			a.release("")
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		d.URL = (&url.URL{Scheme: "file", Path: p}).String()
 	}
 	if id == "" {
 		d.ID = random(8)
@@ -121,9 +147,9 @@ func (a *App) saveDAV(w http.ResponseWriter, r *http.Request) {
 		}
 		a.mu.Unlock()
 		if e != nil {
-			a.release("保存 WebDAV 失败：" + e.Error())
+			a.release("保存存储位置失败：" + e.Error())
 		} else {
-			a.release("WebDAV「" + d.Name + "」已保存。")
+			a.release("存储位置「" + d.Name + "」已保存。")
 		}
 		http.Redirect(w, r, base+"/webdav", 303)
 		return
@@ -143,7 +169,7 @@ func (a *App) saveDAV(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			a.mu.Unlock()
 			a.release("")
-			http.Error(w, "找不到 WebDAV 配置", 404)
+			http.Error(w, "找不到存储位置", 404)
 			return
 		}
 		a.davs[i] = d
@@ -153,15 +179,15 @@ func (a *App) saveDAV(w http.ResponseWriter, r *http.Request) {
 		}
 		a.mu.Unlock()
 		if e != nil {
-			a.release("保存 WebDAV 失败：" + e.Error())
+			a.release("保存存储位置失败：" + e.Error())
 		} else {
-			a.release("WebDAV「" + d.Name + "」已更新。")
+			a.release("存储位置「" + d.Name + "」已更新。")
 		}
 		http.Redirect(w, r, base+"/webdav", 303)
 		return
 	}
 	a.mu.Lock()
-	a.setMessageLocked("remote", "", fmt.Sprintf("正在验证远程路径的 %d 个关联任务；全部成功后才会切换。", len(affected)))
+	a.setMessageLocked("remote", "", fmt.Sprintf("正在验证存储位置的 %d 个关联任务；全部成功后才会切换。", len(affected)))
 	a.mu.Unlock()
 	a.wg.Add(1)
 	go a.syncDAV(d, affected)
@@ -197,6 +223,15 @@ func (a *App) syncDAV(d DAVConfig, jobs []Config) {
 		if e != nil {
 			a.release("更新失败，原配置未变：" + e.Error())
 			return
+		}
+		cfg.LocalPath = ""
+		if d.Protocol == "local" {
+			cfg.LocalPath, e = localConnectionTarget(d, old.TargetPath)
+			if e != nil {
+				a.release("更新失败，原配置未变：" + e.Error())
+				return
+			}
+			cfg.URL = cfg.LocalPath
 		}
 		cfg.User = d.User
 		cfg.WebDAVPassword = d.Password
@@ -238,7 +273,7 @@ func (a *App) syncDAV(d DAVConfig, jobs []Config) {
 	di, _, ok := a.findDAV(d.ID)
 	if !ok {
 		a.mu.Unlock()
-		a.release("WebDAV 配置不存在，原配置未变")
+		a.release("存储位置不存在，原配置未变")
 		return
 	}
 	previousJobs := append([]Config(nil), a.jobs...)
@@ -280,7 +315,7 @@ func (a *App) syncDAV(d DAVConfig, jobs []Config) {
 			p.Close()
 		}
 	}
-	a.release(fmt.Sprintf("WebDAV「%s」及 %d 个关联任务已更新。", d.Name, len(staged)))
+	a.release(fmt.Sprintf("存储位置「%s」及 %d 个关联任务已更新。", d.Name, len(staged)))
 }
 func (a *App) removeDAV(w http.ResponseWriter, r *http.Request) {
 	if e := a.post(r); e != nil {
@@ -300,12 +335,12 @@ func (a *App) removeDAV(w http.ResponseWriter, r *http.Request) {
 	id := r.PostForm.Get("id")
 	i, d, ok := a.findDAV(id)
 	if !ok {
-		http.Error(w, "找不到 WebDAV 配置", 404)
+		http.Error(w, "找不到存储位置", 404)
 		return
 	}
 	for _, j := range a.jobs {
 		if j.DAVID == id {
-			a.setMessageLocked("remote", "", "远程路径「"+d.Name+"」仍被任务「"+j.Name+"」使用，请先更换该任务的连接。")
+			a.setMessageLocked("remote", "", "存储位置「"+d.Name+"」仍被任务「"+j.Name+"」使用，请先更换该任务的连接。")
 			http.Redirect(w, r, base+"/webdav", 303)
 			return
 		}
@@ -317,7 +352,7 @@ func (a *App) removeDAV(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "保存失败："+e.Error(), 500)
 		return
 	}
-	a.setMessageLocked("remote", "", "已删除远程路径「"+d.Name+"」，不会删除远端数据。")
+	a.setMessageLocked("remote", "", "已删除存储位置「"+d.Name+"」，不会删除仓库数据。")
 	http.Redirect(w, r, base+"/webdav", 303)
 }
 func (a *App) testDAV(w http.ResponseWriter, r *http.Request) {
@@ -331,7 +366,7 @@ func (a *App) testDAV(w http.ResponseWriter, r *http.Request) {
 		_, d, ok := a.findDAV(id)
 		a.mu.Unlock()
 		if !ok {
-			http.Error(w, "找不到 WebDAV 配置", 404)
+			http.Error(w, "找不到存储位置", 404)
 			return
 		}
 		old = d
@@ -339,6 +374,15 @@ func (a *App) testDAV(w http.ResponseWriter, r *http.Request) {
 	d, e := parseDAV(r, old)
 	if e != nil {
 		writeDAVTest(w, false, e.Error())
+		return
+	}
+	if d.Protocol == "local" {
+		u, _ := url.Parse(d.URL)
+		if _, err := a.selectLocalRepository(u.Path, ""); err != nil {
+			writeDAVTest(w, false, err.Error())
+		} else {
+			writeDAVTest(w, true, "本地目录已授权且可读写、可访问。")
+		}
 		return
 	}
 	if d.Protocol == "sftp" {

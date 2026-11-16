@@ -98,6 +98,15 @@ func (a *App) reconnect(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, e.Error(), 400)
 			return
 		}
+		if dav.Protocol == "local" {
+			localPath, e = localConnectionTarget(dav, targetPath)
+			if e != nil {
+				a.release("")
+				http.Error(w, e.Error(), 400)
+				return
+			}
+			target = localPath
+		}
 	}
 	cfg := previous
 	cfg.DAVID = davID

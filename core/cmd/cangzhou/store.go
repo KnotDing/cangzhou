@@ -149,7 +149,7 @@ func (a *App) loadJobs() error {
 	seenDAV := map[string]bool{}
 	for _, d := range a.davs {
 		if !validDAVID.MatchString(d.ID) || seenDAV[d.ID] || strings.TrimSpace(d.Name) == "" {
-			return errors.New("WebDAV 配置包含无效或重复编号")
+			return errors.New("存储位置包含无效或重复编号")
 		}
 		seenDAV[d.ID] = true
 	}

@@ -1,5 +1,5 @@
 appname=cangzhou
-version=0.4.13
+version=0.4.14
 display_name=藏舟
 desc=基于 Kopia 的加密备份应用，支持将目录备份至本地、WebDAV 或 SFTP 仓库，并浏览和恢复快照。
 platform=x86
@@ -9,7 +9,7 @@ maintainer_url=https://github.com/KnotDing/cangzhou
 distributor=Knot
 distributor_url=https://github.com/KnotDing/cangzhou
 os_min_version=1.1.3100
-changelog=测试版：优化本地与远程仓库的目录输入；备份运行期间可填写和测试远程连接。
+changelog=测试版：统一管理本地目录、WebDAV 和 SFTP 存储位置，任务可选择存储位置并指定仓库子目录。
 disable_authorization_path=false
 desktop_uidir=ui
 desktop_applaunchname=cangzhou.Application

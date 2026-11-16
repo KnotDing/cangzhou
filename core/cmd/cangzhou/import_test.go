@@ -7,6 +7,8 @@ import (
 	"mime/multipart"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -55,5 +57,43 @@ func TestImportFailurePreservesExistingSettings(t *testing.T) {
 	a.wg.Wait()
 	if w.Code != 303 || len(a.davs) != 1 || len(a.jobs) != 0 || a.globalUploadKiB != 777 || !strings.Contains(a.message, "原设置未更改") {
 		t.Fatal("partial import", a.message)
+	}
+}
+
+func TestImportLocalStorageAndTask(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, base, repo := filepath.Join(root, "source"), filepath.Join(root, "storage"), filepath.Join(root, "storage", "repo")
+	for _, p := range []string{src, base, repo} {
+		if err := os.Mkdir(p, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dir, exe := fakeKopia(t, "exit 0")
+	a := &App{dir: dir, kopia: exe, csrf: "token", ctx: context.Background(), roots: []string{root}, proxies: map[string]*davProxy{}, proxyErrors: map[string]string{}}
+	d := importDocument{Version: 1, DAVs: []exportDAV{{ID: "1111111111111111", Name: "local", Protocol: "local", URL: (&url.URL{Scheme: "file", Path: base}).String()}}, Jobs: []exportJob{{ID: "2222222222222222", Name: "task", DAVID: "1111111111111111", Source: src, TargetPath: "repo", LocalPath: repo, RepoPassword: "test-password-123"}}}
+	b, _ := json.Marshal(d)
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	mw.WriteField("csrf", "token")
+	f, _ := mw.CreateFormFile("settings", "settings.json")
+	f.Write(b)
+	mw.Close()
+	req := httptest.NewRequest("POST", "/import", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	w := httptest.NewRecorder()
+	a.importSettings(w, req)
+	if w.Code != 200 {
+		t.Fatalf("preview %d %s", w.Code, w.Body.String())
+	}
+	req = httptest.NewRequest("POST", "/import/apply", strings.NewReader(url.Values{"csrf": {"token"}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w = httptest.NewRecorder()
+	a.applyImport(w, req)
+	a.wg.Wait()
+	if w.Code != 303 || len(a.jobs) != 1 || len(a.davs) != 1 || a.jobs[0].LocalPath != repo || a.jobs[0].DAVID != d.DAVs[0].ID {
+		t.Fatalf("import failed: %d %s", w.Code, a.message)
 	}
 }

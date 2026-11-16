@@ -4,22 +4,6 @@ import "net/http"
 
 const submitGuardJS = `"use strict";
 (() => {
-  // Keep both values intact while showing only the selected repository type.
-  document.querySelectorAll("form[data-repository-form]").forEach(form => {
-    const select = form.querySelector('select[name="dav_id"]');
-    const local = form.querySelector('[data-repository-path="local"]');
-    const remote = form.querySelector('[data-repository-path="remote"]');
-    const localInput = local.querySelector('input[name="local_path"]');
-    function updateRepositoryPath() {
-      const isLocal = select.value === "local";
-      local.hidden = !isLocal;
-      remote.hidden = !select.value || isLocal;
-      localInput.required = isLocal;
-    }
-    select.addEventListener("change", updateRepositoryPath);
-    window.addEventListener("pageshow", updateRepositoryPath);
-    updateRepositoryPath();
-  });
   const locked = new Map();
   function unlock(form) {
     const buttons = locked.get(form);
