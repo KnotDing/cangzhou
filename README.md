@@ -7,7 +7,7 @@
 
   面向飞牛 fnOS 的加密备份应用 · Kopia 快照 · WebDAV / SFTP
 
-  [下载安装包](https://github.com/KnotDing/cangzhou/releases/tag/v0.4.8) · [Gitea 发布页](https://gitea.knotding.com/knot/cangzhou/releases) · [开始使用](#安装和首次备份) · [开发构建](#开发与构建)
+  [下载安装包](https://github.com/KnotDing/cangzhou/releases/tag/v0.4.9) · [Gitea 发布页](https://gitea.knotding.com/knot/cangzhou/releases) · [开始使用](#安装和首次备份) · [开发构建](#开发与构建)
 </div>
 
 藏舟运行在源 NAS 上，通过 WebDAV 或 SFTP 将数据备份到另一台设备。Kopia 负责加密仓库和快照，藏舟提供任务管理与嵌入飞牛的应用界面。
@@ -16,10 +16,10 @@
 
 <p align="center"><sub>备份概览 · 以下截图均使用模拟数据与示例地址</sub></p>
 
-当前安装包为 **0.4.8，x86-64，要求 fnOS 1.1.3100 或以上**。它通过飞牛统一网关在应用窗口中打开，需要飞牛管理员身份。
+当前安装包为 **0.4.9，x86-64，要求 fnOS 1.1.3100 或以上**。它通过飞牛统一网关在应用窗口中打开，需要飞牛管理员身份。
 
 - [GitHub Releases](https://github.com/KnotDing/cangzhou/releases)：提供 FPK、校验文件以及平台自动生成的源码归档
-- [本版本测试说明](releases/0.4.8/README.md)
+- [本版本测试说明](releases/0.4.9/README.md)
 
 本地工作目录若保留了现成安装包，可从 `dist/` 找到；构建产物不纳入 Git。
 

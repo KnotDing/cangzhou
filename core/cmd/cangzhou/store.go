@@ -159,6 +159,10 @@ func (a *App) loadJobs() error {
 		if a.jobs[i].LastStatus == "running" {
 			a.jobs[i].LastStatus = "interrupted"
 			a.jobs[i].LastError = "上次运行中服务停止，结果未确认；请检查快照"
+			if n := len(a.jobs[i].History); n > 0 && a.jobs[i].History[n-1].Status == "running" {
+				a.jobs[i].History[n-1].Status = "interrupted"
+				a.jobs[i].History[n-1].Error = a.jobs[i].LastError
+			}
 			changed = true
 		}
 	}

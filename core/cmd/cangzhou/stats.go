@@ -191,6 +191,12 @@ func (a *App) refreshSizeAfterBackup(cfg Config) error {
 			a.jobs[i].RepoSizeKnown = true
 			a.jobs[i].RepoSizeAt = time.Now()
 			a.jobs[i].RepoSizeError = ""
+			if count := len(a.jobs[i].History); count > 0 {
+				r := &a.jobs[i].History[count-1]
+				if r.Status == "success" {
+					r.RepoSizeBytes, r.RepoSizeKnown, r.RepoSizeAt = n, true, a.jobs[i].RepoSizeAt
+				}
+			}
 		}
 		if e := a.save(); e != nil {
 			return fmt.Errorf("保存仓库统计失败: %w", e)

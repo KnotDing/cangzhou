@@ -11,11 +11,11 @@ import (
 )
 
 type backupProgress struct {
-	JobID                      string
-	Started                    time.Time
-	Processed, Total           int64
-	KnownProcessed, KnownTotal bool
-	Remaining                  string
+	JobID                                     string
+	Started                                   time.Time
+	Processed, Total, Uploaded                int64
+	KnownProcessed, KnownTotal, KnownUploaded bool
+	Remaining                                 string
 }
 type progressView struct {
 	Started            time.Time
@@ -26,6 +26,7 @@ type progressView struct {
 }
 
 var progressCounts = regexp.MustCompile(`hashed \(([0-9.]+)\s+([kKMGTPE]?i?B)\),\s*[0-9]+ cached \(([0-9.]+)\s+([kKMGTPE]?i?B)\)`)
+var progressUploaded = regexp.MustCompile(`uploaded\s+([0-9.]+)\s+([kKMGTPE]?i?B)`)
 var progressEstimate = regexp.MustCompile(`estimated\s+([0-9.]+)\s+([kKMGTPE]?i?B)\s+\([^)]*\)\s+([^,\r\n]+?)\s+left`)
 
 func progressBytes(value, unit string) (int64, bool) {
@@ -61,6 +62,11 @@ func parseProgress(line string, p *backupProgress) bool {
 	cached, ok := progressBytes(m[3], m[4])
 	if !ok || hashed > math.MaxInt64-cached {
 		return false
+	}
+	if upload := progressUploaded.FindStringSubmatch(line); upload != nil {
+		if n, ok := progressBytes(upload[1], upload[2]); ok {
+			p.Uploaded, p.KnownUploaded = n, true
+		}
 	}
 	p.Processed = hashed + cached
 	p.KnownProcessed = true

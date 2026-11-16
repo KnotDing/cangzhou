@@ -49,6 +49,7 @@ type Config struct {
 	RepoSizeKnown                                   bool
 	RepoSizeAt, RepoSizeAttemptAt                   time.Time
 	RepoSizeError                                   string
+	History                                         []backupRecord `json:",omitempty"`
 }
 type DAVConfig struct {
 	ID, Name, URL, User, Password                      string
@@ -292,6 +293,10 @@ func (a *App) release(msg string) {
 
 }
 func (a *App) startBackup(id string) error {
+	return a.startBackupWithTrigger(id, "manual")
+}
+
+func (a *App) startBackupWithTrigger(id, trigger string) error {
 	cfg, e := a.acquire("执行备份", id)
 	if e != nil {
 		return e
@@ -326,6 +331,12 @@ func (a *App) startBackup(id string) error {
 	a.jobs[i].LastFinished = time.Time{}
 	a.jobs[i].LastStatus = "running"
 	a.jobs[i].LastError = ""
+	history := append([]backupRecord(nil), a.jobs[i].History...)
+	history = append(history, backupRecord{Started: now, Status: "running", Trigger: trigger})
+	if len(history) > maxBackupHistory {
+		history = history[len(history)-maxBackupHistory:]
+	}
+	a.jobs[i].History = history
 	cfg.effectiveUploadKiB = effectiveLimit(a.globalUploadKiB, a.jobs[i].UploadLimitKiB)
 	a.progress = &backupProgress{JobID: id, Started: now}
 	if e := a.save(); e != nil {
@@ -370,6 +381,13 @@ func (a *App) startBackup(id string) error {
 			a.jobs[i].LastFinished = time.Now()
 			a.jobs[i].LastStatus = status
 			a.jobs[i].LastError = detail
+			if n := len(a.jobs[i].History); n > 0 && a.jobs[i].History[n-1].Started.Equal(now) {
+				r := &a.jobs[i].History[n-1]
+				r.Finished, r.Status, r.Error = a.jobs[i].LastFinished, status, detail
+				if a.progress != nil && a.progress.JobID == id {
+					r.Uploaded, r.UploadedKnown = a.progress.Uploaded, a.progress.KnownUploaded
+				}
+			}
 			if j.IntervalHours > 0 && status != "interrupted" {
 				a.jobs[i].Next = time.Now().Add(time.Duration(j.IntervalHours) * time.Hour)
 			}
@@ -440,7 +458,12 @@ func (a *App) post(r *http.Request) error {
 	return nil
 }
 func (a *App) snapshots(w http.ResponseWriter, r *http.Request) {
-	cfg, e := a.acquire("读取快照", r.URL.Query().Get("job"))
+	id := r.URL.Query().Get("job")
+	if id == "" {
+		http.Redirect(w, r, base+"/", http.StatusSeeOther)
+		return
+	}
+	cfg, e := a.acquire("读取快照", id)
 	if e != nil {
 		http.Redirect(w, r, base+"/", http.StatusSeeOther)
 		return
@@ -990,7 +1013,7 @@ func (a *App) scheduleOnce() {
 	}
 	a.mu.Unlock()
 	if id != "" {
-		if e := a.startBackup(id); e != nil && !errors.Is(e, errBusy) {
+		if e := a.startBackupWithTrigger(id, "scheduled"); e != nil && !errors.Is(e, errBusy) {
 			a.mu.Lock()
 			if i, j, ok := a.find(id); ok {
 				a.jobs[i].Next = time.Now().Add(time.Duration(j.IntervalHours) * time.Hour)
@@ -1163,6 +1186,7 @@ func main() {
 	m.HandleFunc("/remove", a.auth(a.remove))
 	m.HandleFunc("/pause", a.auth(a.pause))
 	m.HandleFunc("/snapshots", a.auth(a.snapshots))
+	m.HandleFunc("/history", a.auth(a.backupHistory))
 	m.HandleFunc("/browse", a.auth(a.browse))
 	m.HandleFunc("/restore", a.auth(a.restore))
 	m.HandleFunc("/download", a.auth(a.download))
