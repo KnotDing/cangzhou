@@ -15,12 +15,12 @@ type exportDAV struct {
 	Password                               string `json:",omitempty"`
 }
 type exportJob struct {
-	ID, Name, DAVID, TargetPath, URL, User, Source string
-	IntervalHours                                  int
-	UploadLimitKiB                                 int
-	Paused, InsecureTLS                            bool
-	WebDAVPassword                                 string `json:",omitempty"`
-	RepoPassword                                   string `json:",omitempty"`
+	ID, Name, DAVID, TargetPath, URL, User, Source, LocalPath string
+	IntervalHours                                             int
+	UploadLimitKiB                                            int
+	Paused, InsecureTLS                                       bool
+	WebDAVPassword                                            string `json:",omitempty"`
+	RepoPassword                                              string `json:",omitempty"`
 }
 
 func (a *App) exportPage(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +62,7 @@ func (a *App) exportSettings(w http.ResponseWriter, r *http.Request) {
 		data.DAVs = append(data.DAVs, x)
 	}
 	for _, j := range a.jobs {
-		x := exportJob{ID: j.ID, Name: j.Name, DAVID: j.DAVID, TargetPath: j.TargetPath, URL: j.URL, User: j.User, Source: j.Source, IntervalHours: j.IntervalHours, UploadLimitKiB: j.UploadLimitKiB, Paused: j.Paused, InsecureTLS: j.InsecureTLS}
+		x := exportJob{ID: j.ID, Name: j.Name, DAVID: j.DAVID, TargetPath: j.TargetPath, LocalPath: j.LocalPath, URL: j.URL, User: j.User, Source: j.Source, IntervalHours: j.IntervalHours, UploadLimitKiB: j.UploadLimitKiB, Paused: j.Paused, InsecureTLS: j.InsecureTLS}
 		if include {
 			x.RepoPassword = j.RepoPassword
 			x.WebDAVPassword = j.WebDAVPassword

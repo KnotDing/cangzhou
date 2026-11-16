@@ -7,6 +7,8 @@ set -euo pipefail
 [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
 version="${RELEASE_TAG#v}"
 notes="releases/$version/README.md"
+prerelease=false
+[ ! -f "releases/$version/prerelease" ] || prerelease=true
 [ -s "$notes" ] || { echo 'Missing release notes' >&2; exit 1; }
 [ "$(sed -n 's/^version=//p' package/manifest)" = "$version" ]
 [[ "$GITEA_TOKEN" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'Unsupported token format' >&2; exit 1; }
@@ -17,12 +19,12 @@ printf 'header = "Authorization: token %s"\n' "$GITEA_TOKEN" > "$tmp/curl.conf"
 api="${GITHUB_API_URL%/}/repos/${GITHUB_REPOSITORY}"
 status="$(curl --config "$tmp/curl.conf" --silent --show-error --output "$tmp/release.json" --write-out '%{http_code}' "$api/releases/tags/$RELEASE_TAG")"
 if [ "$status" = 404 ]; then
-  jq -n --arg tag "$RELEASE_TAG" --rawfile body "$notes" '{tag_name:$tag,name:("藏舟 " + $tag),body:$body,draft:false,prerelease:false}' > "$tmp/create.json"
+  jq -n --arg tag "$RELEASE_TAG" --argjson prerelease "$prerelease" --rawfile body "$notes" '{tag_name:$tag,name:("藏舟 " + $tag),body:$body,draft:false,prerelease:$prerelease}' > "$tmp/create.json"
   curl --config "$tmp/curl.conf" --fail --silent --show-error -H 'Content-Type: application/json' -X POST --data-binary "@$tmp/create.json" "$api/releases" > "$tmp/release.json"
 elif [ "$status" != 200 ]; then
   echo "Unable to inspect existing release (HTTP $status)" >&2; exit 1
 fi
-jq -e --arg tag "$RELEASE_TAG" '.tag_name == $tag and .draft == false and .prerelease == false' "$tmp/release.json" >/dev/null
+jq -e --arg tag "$RELEASE_TAG" --argjson prerelease "$prerelease" '.tag_name == $tag and .draft == false and .prerelease == $prerelease' "$tmp/release.json" >/dev/null
 release_id="$(jq -er '.id | numbers' "$tmp/release.json")"
 for name in "cangzhou-$version-x86.fpk" "cangzhou-$version-arm.fpk" SHA256SUMS; do
   asset="artifacts/$name"

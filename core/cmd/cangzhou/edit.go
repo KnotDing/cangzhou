@@ -64,30 +64,45 @@ func (a *App) reconnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	davID := r.PostForm.Get("dav_id")
-	a.mu.Lock()
-	_, dav, ok := a.findDAV(davID)
-	a.mu.Unlock()
-	if !ok {
-		a.release("")
-		http.Error(w, "请选择已保存的 WebDAV 连接", 400)
-		return
-	}
-	u, e := url.Parse(dav.URL)
-	if e != nil {
-		a.release("")
-		http.Error(w, "WebDAV 地址无效", 400)
-		return
-	}
+	var dav DAVConfig
+	var target, localPath string
 	targetPath := strings.Trim(r.PostForm.Get("target_path"), "/")
-	target, e := repositoryURL(u, targetPath)
-	if e != nil {
-		a.release("")
-		http.Error(w, e.Error(), 400)
-		return
+	if davID == "local" {
+		localPath, e = a.selectLocalRepository(r.PostForm.Get("local_path"), previous.Source)
+		if e != nil {
+			a.release("")
+			http.Error(w, e.Error(), 400)
+			return
+		}
+		target = localPath
+		davID, targetPath = "", ""
+	} else {
+		a.mu.Lock()
+		_, d, ok := a.findDAV(davID)
+		a.mu.Unlock()
+		if !ok {
+			a.release("")
+			http.Error(w, "请选择已保存的连接", 400)
+			return
+		}
+		dav = d
+		u, err := url.Parse(dav.URL)
+		if err != nil {
+			a.release("")
+			http.Error(w, "连接地址无效", 400)
+			return
+		}
+		target, e = repositoryURL(u, targetPath)
+		if e != nil {
+			a.release("")
+			http.Error(w, e.Error(), 400)
+			return
+		}
 	}
 	cfg := previous
 	cfg.DAVID = davID
 	cfg.TargetPath = targetPath
+	cfg.LocalPath = localPath
 	cfg.ConnectionID = random(8)
 	cfg.URL = target
 	cfg.User = dav.User

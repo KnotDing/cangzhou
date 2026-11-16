@@ -30,7 +30,7 @@ import (
 
 type Config struct {
 	ID, Name                                        string
-	DAVID, TargetPath                               string
+	DAVID, TargetPath, LocalPath                    string
 	URL, User, WebDAVPassword, RepoPassword, Source string
 	IntervalHours                                   int
 	UploadLimitKiB                                  int
@@ -114,6 +114,11 @@ func writeFile(path string, b []byte) error {
 	return os.Rename(tmp, path)
 }
 func (a *App) command(ctx context.Context, cfg Config, args ...string) (*exec.Cmd, string, error) {
+	if cfg.LocalPath != "" {
+		if _, e := a.checkLocalRepository(cfg.LocalPath, ""); e != nil {
+			return nil, "", e
+		}
+	}
 	stateDir, e := a.jobDir(cfg.ID)
 	if e != nil {
 		return nil, "", e
@@ -309,6 +314,12 @@ func (a *App) startBackupWithTrigger(id, trigger string) error {
 	if e != nil || !check.Readable || !check.Searchable {
 		a.release("任务「" + cfg.Name + "」的源目录未授权或不可读取")
 		return errors.New("源目录未授权或不可读取")
+	}
+	if cfg.LocalPath != "" {
+		if _, e := a.checkLocalRepository(cfg.LocalPath, check.Path); e != nil {
+			a.release("本地仓库不可用：" + e.Error())
+			return e
+		}
 	}
 	a.mu.Lock()
 	i, old, ok := a.find(id)
@@ -694,27 +705,41 @@ func (a *App) setup(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, base+"/", 303)
 		return
 	}
-	a.mu.Lock()
-	_, dav, ok := a.findDAV(davID)
-	a.mu.Unlock()
-	if !ok {
-		a.release("")
-		http.Error(w, "请选择已保存的 WebDAV 连接", 400)
-		return
+	var dav DAVConfig
+	var target, localPath string
+	if davID == "local" {
+		localPath, e = a.selectLocalRepository(r.PostForm.Get("local_path"), source.Path)
+		if e != nil {
+			a.release("")
+			http.Error(w, e.Error(), 400)
+			return
+		}
+		target = localPath
+		davID, targetPath = "", ""
+	} else {
+		a.mu.Lock()
+		_, d, ok := a.findDAV(davID)
+		a.mu.Unlock()
+		if !ok {
+			a.release("")
+			http.Error(w, "请选择已保存的连接", 400)
+			return
+		}
+		dav = d
+		u, err := url.Parse(dav.URL)
+		if err != nil {
+			a.release("")
+			http.Error(w, "连接地址无效", 400)
+			return
+		}
+		target, e = repositoryURL(u, targetPath)
+		if e != nil {
+			a.release("")
+			http.Error(w, e.Error(), 400)
+			return
+		}
 	}
-	u, e := url.Parse(dav.URL)
-	if e != nil {
-		a.release("")
-		http.Error(w, "WebDAV 地址无效", 400)
-		return
-	}
-	target, e := repositoryURL(u, targetPath)
-	if e != nil {
-		a.release("")
-		http.Error(w, e.Error(), 400)
-		return
-	}
-	cfg := Config{ID: random(8), Name: name, DAVID: davID, TargetPath: targetPath, URL: target, User: dav.User, WebDAVPassword: dav.Password, RepoPassword: pw, Source: source.Path, IntervalHours: hours, UploadLimitKiB: limit, TrackingSince: time.Now(), InsecureTLS: dav.InsecureTLS}
+	cfg := Config{ID: random(8), Name: name, DAVID: davID, TargetPath: targetPath, LocalPath: localPath, URL: target, User: dav.User, WebDAVPassword: dav.Password, RepoPassword: pw, Source: source.Path, IntervalHours: hours, UploadLimitKiB: limit, TrackingSince: time.Now(), InsecureTLS: dav.InsecureTLS}
 	a.mu.Lock()
 	a.setMessageLocked("task", "", "正在连接仓库，请稍候；连接完成后会自动更新。")
 	a.mu.Unlock()
@@ -801,6 +826,12 @@ func (a *App) job(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		http.Error(w, "找不到该任务", 404)
 		return
+	}
+	if old.LocalPath != "" {
+		if _, e := a.checkLocalRepository(old.LocalPath, c.Path); e != nil {
+			http.Error(w, e.Error(), 400)
+			return
+		}
 	}
 	a.jobs[i].Name = name
 	a.jobs[i].Source = c.Path

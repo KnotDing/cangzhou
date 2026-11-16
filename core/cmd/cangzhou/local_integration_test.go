@@ -5,9 +5,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -18,9 +16,15 @@ func TestRealKopiaLocalRepository(t *testing.T) {
 	if binary == "" {
 		t.Skip("requires CANGZHOU_TEST_KOPIA")
 	}
-	dir := t.TempDir()
+	dir, e := filepath.EvalSymlinks(t.TempDir())
+	if e != nil {
+		t.Fatal(e)
+	}
 	src := filepath.Join(dir, "source")
 	repo := filepath.Join(dir, "repository")
+	if e := os.Mkdir(repo, 0700); e != nil {
+		t.Fatal(e)
+	}
 	if e := os.Mkdir(src, 0700); e != nil {
 		t.Fatal(e)
 	}
@@ -49,19 +53,47 @@ func TestRealKopiaLocalRepository(t *testing.T) {
 		t.Fatal(e)
 	}
 	id := "0123456789abcdef"
-	a := &App{dir: dir, kopia: binary, csrf: "token", roots: []string{src}, ctx: context.Background(), jobs: []Config{{ID: id, Name: "local", Source: src, RepoPassword: "test-password-123", TrackingSince: time.Now()}}, proxyErrors: map[string]string{}}
-	state, e := a.prepareJob(id)
+	a := &App{dir: dir, kopia: binary, csrf: "token", roots: []string{dir}, ctx: context.Background(), jobs: []Config{{ID: id, Name: "local", Source: src, LocalPath: repo, RepoPassword: "test-password-123", TrackingSince: time.Now()}}, proxyErrors: map[string]string{}}
+	if _, e = a.prepareJob(id); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = a.connectRemote(context.Background(), &a.jobs[0], DAVConfig{}, "create"); e != nil {
+		t.Fatalf("create: %v", e)
+	}
+	// Reconnect through a separate configuration, then check that a wrong
+	// password cannot replace that working connection.
+	connected := a.jobs[0]
+	connected.ConnectionID = random(8)
+	p, e := a.repositoryConfigPath(connected)
 	if e != nil {
 		t.Fatal(e)
 	}
-	args := []string{"repository", "create", "filesystem", "--path=" + repo, "--no-check-for-updates"}
-	if runtime.GOOS == "darwin" {
-		args = append(args, "--no-use-keychain")
+	if e = os.MkdirAll(filepath.Dir(p), 0700); e != nil {
+		t.Fatal(e)
 	}
-	cmd := exec.Command(binary, args...)
-	cmd.Env = append(os.Environ(), "KOPIA_PASSWORD=test-password-123", "KOPIA_CONFIG_PATH="+filepath.Join(state, "repository.config"), "KOPIA_LOG_DIR="+filepath.Join(state, "logs"), "KOPIA_CACHE_DIRECTORY="+filepath.Join(state, "cache"))
-	if out, e := cmd.CombinedOutput(); e != nil {
-		t.Fatalf("create: %v %s", e, out)
+	if _, e = a.connectRemote(context.Background(), &connected, DAVConfig{}, "connect"); e != nil {
+		t.Fatalf("connect existing: %v", e)
+	}
+	bad := connected
+	bad.ConnectionID = random(8)
+	bad.RepoPassword = "wrong-password-123"
+	p, _ = a.repositoryConfigPath(bad)
+	if e = os.MkdirAll(filepath.Dir(p), 0700); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = a.connectRemote(context.Background(), &bad, DAVConfig{}, "connect"); e == nil {
+		t.Fatal("wrong password accepted")
+	}
+	a.jobs[0] = connected
+	if e = a.save(); e != nil {
+		t.Fatal(e)
+	}
+	a.jobs = nil
+	if e = a.loadJobs(); e != nil {
+		t.Fatal(e)
+	}
+	if len(a.jobs) != 1 || a.jobs[0].LocalPath != repo {
+		t.Fatal("local repository lost on restart")
 	}
 	if e = a.startBackup(id); e != nil {
 		t.Fatal(e)

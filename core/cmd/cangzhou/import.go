@@ -77,7 +77,7 @@ func (a *App) importSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	seen = map[string]bool{}
 	for _, x := range d.Jobs {
-		if !validJobID.MatchString(x.ID) || seen[x.ID] || strings.TrimSpace(x.Name) == "" || len(x.Name) > 120 || !filepath.IsAbs(x.Source) || x.IntervalHours < 0 || x.IntervalHours > 720 || x.UploadLimitKiB < 0 || x.UploadLimitKiB > maxUploadKiB {
+		if !validJobID.MatchString(x.ID) || seen[x.ID] || strings.TrimSpace(x.Name) == "" || len(x.Name) > 120 || !filepath.IsAbs(x.Source) || (x.LocalPath != "" && (!filepath.IsAbs(x.LocalPath) || x.DAVID != "")) || x.IntervalHours < 0 || x.IntervalHours > 720 || x.UploadLimitKiB < 0 || x.UploadLimitKiB > maxUploadKiB {
 			http.Error(w, "任务配置无效或编号重复", 400)
 			return
 		}
@@ -170,9 +170,9 @@ func (a *App) applyImport(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		d, ok := davMap[j.DAVID]
-		if !ok {
+		if j.LocalPath == "" && !ok {
 			a.release("")
-			http.Error(w, "任务「"+j.Name+"」缺少关联的连接；旧版独立配置请先在旧版中关联连接", 400)
+			http.Error(w, "任务「"+j.Name+"」缺少关联的连接", 400)
 			return
 		}
 		pw := r.PostForm.Get("repo_" + j.ID)
@@ -184,14 +184,20 @@ func (a *App) applyImport(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "请填写任务「"+j.Name+"」的仓库密码", 400)
 			return
 		}
-		u, _ := url.Parse(d.URL)
-		target, err := repositoryURL(u, j.TargetPath)
-		if err != nil {
-			a.release("")
-			http.Error(w, "目标子目录无效", 400)
-			return
+		var target string
+		if j.LocalPath != "" {
+			target = j.LocalPath
+		} else {
+			u, _ := url.Parse(d.URL)
+			var err error
+			target, err = repositoryURL(u, j.TargetPath)
+			if err != nil {
+				a.release("")
+				http.Error(w, "目标子目录无效", 400)
+				return
+			}
 		}
-		jobs = append(jobs, Config{ID: j.ID, Name: j.Name, DAVID: d.ID, TargetPath: j.TargetPath, URL: target, User: d.User, WebDAVPassword: d.Password, RepoPassword: pw, Source: j.Source, IntervalHours: j.IntervalHours, UploadLimitKiB: j.UploadLimitKiB, Paused: j.Paused, InsecureTLS: d.InsecureTLS, ConnectionID: random(8)})
+		jobs = append(jobs, Config{ID: j.ID, Name: j.Name, DAVID: d.ID, TargetPath: j.TargetPath, LocalPath: j.LocalPath, URL: target, User: d.User, WebDAVPassword: d.Password, RepoPassword: pw, Source: j.Source, IntervalHours: j.IntervalHours, UploadLimitKiB: j.UploadLimitKiB, Paused: j.Paused, InsecureTLS: d.InsecureTLS, ConnectionID: random(8)})
 	}
 	a.wg.Add(1)
 	go a.connectImported(newDAV, jobs, skipped, davMap, r.PostForm.Get("import_global_limit") == "yes", doc.GlobalUploadKiB)

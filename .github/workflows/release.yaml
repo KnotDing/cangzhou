@@ -53,10 +53,12 @@ jobs:
           version="${RELEASE_TAG#v}"
           notes="releases/${version}/README.md"
           test -s "$notes"
+          prerelease=false
+          if [ -f "releases/${version}/prerelease" ]; then prerelease=true; fi
           assets=("artifacts/cangzhou-${version}-x86.fpk" "artifacts/cangzhou-${version}-arm.fpk" artifacts/SHA256SUMS)
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
-            gh release edit "$RELEASE_TAG" --prerelease=false --title "藏舟 $RELEASE_TAG" --notes-file "$notes"
+            gh release edit "$RELEASE_TAG" --prerelease="$prerelease" --title "藏舟 $RELEASE_TAG" --notes-file "$notes"
           else
-            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --title "藏舟 $RELEASE_TAG" --notes-file "$notes"
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --prerelease="$prerelease" --title "藏舟 $RELEASE_TAG" --notes-file "$notes"
           fi

@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -117,6 +118,18 @@ func testSFTP(ctx context.Context, d DAVConfig) error {
 	return e
 }
 func (a *App) connectRemote(ctx context.Context, cfg *Config, d DAVConfig, mode string) (*davProxy, error) {
+	if cfg.LocalPath != "" {
+		_, e := a.checkLocalRepository(cfg.LocalPath, cfg.Source)
+		if e != nil {
+			return nil, e
+		}
+		args := []string{"repository", mode, "filesystem", "--path=" + cfg.LocalPath, "--no-persist-credentials", "--no-check-for-updates"}
+		if runtime.GOOS == "darwin" {
+			args = append(args, "--no-use-keychain")
+		}
+		_, e = a.run(ctx, *cfg, args...)
+		return nil, e
+	}
 	if mode == "create" {
 		if e := ensureRepositoryDirectory(ctx, d, cfg.TargetPath); e != nil {
 			return nil, fmt.Errorf("无法创建仓库目标目录：%w", e)
