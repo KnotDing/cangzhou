@@ -1009,8 +1009,8 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 		Total             int
 		Query             string
 		New               bool
-		BackupActive      bool
-	}{a.roots, a.csrf, a.busy, a.visibleMessageLocked("task", ""), a.activity, elapsed(a.startedAt), jobs, davs, len(a.jobs), query, r.URL.Query().Get("new") == "1" || len(a.jobs) == 0, strings.HasPrefix(a.activity, "执行备份：")}
+		HideWait          bool
+	}{a.roots, a.csrf, a.busy, a.visibleMessageLocked("task", ""), a.activity, elapsed(a.startedAt), jobs, davs, len(a.jobs), query, r.URL.Query().Get("new") == "1" || len(a.jobs) == 0, (strings.HasPrefix(a.activity, "执行备份：") || strings.HasPrefix(a.activity, "统计仓库大小："))}
 	a.mu.Unlock()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = page.Execute(w, data)

@@ -118,6 +118,10 @@ func TestHomeHidesBackupWaitOnly(t *testing.T) {
 		t.Fatal("backup wait text visible")
 	}
 	a.progress = nil
+	a.activity = "统计仓库大小：test"
+	if strings.Contains(render(), "已等待") {
+		t.Fatal("repository size wait text visible")
+	}
 	a.activity = "连接仓库"
 	if !strings.Contains(render(), "已等待") {
 		t.Fatal("other operation wait text missing")
