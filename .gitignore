@@ -13,7 +13,6 @@
 /releases/*/*.tar.gz
 /core/cangzhou
 /core/cmd/cangzhou/cangzhou
-/package/app/cangzhou-diagnostic
 /releases/*/package/app/cangzhou-server
 /releases/*/package/app/cangzhou-diagnostic
 /releases/*/package/app/kopia
@@ -62,5 +61,5 @@ known_hosts
 # 本地 CI 工具和构建结果
 /tools/
 /artifacts/
-/packaging/fnos/app/kopia
-/packaging/fnos/app/cangzhou-server
+/package/app/kopia
+/package/app/cangzhou-server

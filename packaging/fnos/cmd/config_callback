@@ -1,8 +1,0 @@
-#!/bin/bash
-set -eu
-: "${TRIM_APPNAME:?}"
-main="/var/apps/${TRIM_APPNAME}/cmd/main"
-if "$main" status; then
- "$main" stop
- "$main" start
-fi

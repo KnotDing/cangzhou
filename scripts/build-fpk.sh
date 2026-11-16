@@ -12,10 +12,10 @@ case "$arch" in
   *) echo 'CANGZHOU_ARCH must be x86 or arm' >&2; exit 1 ;;
 esac
 [ -x "$FNPACK" ] && [ -x "$KOPIA" ]
-version="$(sed -n 's/^version=//p' packaging/fnos/manifest)"
+version="$(sed -n 's/^version=//p' package/manifest)"
 [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo 'Invalid package version' >&2; exit 1; }
 if [ -n "${RELEASE_TAG:-}" ] && [ "$RELEASE_TAG" != "v$version" ]; then
-  echo 'Release tag must match packaging/fnos/manifest version' >&2; exit 1
+  echo 'Release tag must match package/manifest version' >&2; exit 1
 fi
 commit="$(git rev-parse --verify HEAD^{commit})"
 if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
@@ -29,7 +29,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/package" "$tmp/source"
 git archive --format=tar "$commit" | tar -xf - -C "$tmp/source"
-cp -R "$tmp/source/packaging/fnos/." "$tmp/package/"
+cp -R "$tmp/source/package/." "$tmp/package/"
 python3 - "$tmp/package/manifest" "$arch" <<'PYCODE'
 import pathlib, re, sys
 path = pathlib.Path(sys.argv[1])

@@ -2,9 +2,9 @@
 
 ## 项目范围
 
-藏舟是 fnOS 原生加密备份应用。源端运行本应用，通过 Kopia 将快照存放到 WebDAV 或 SFTP 仓库。当前发布版本为 0.4.9，FPK 面向 Linux x86-64，最低 fnOS 版本以发布包的 `manifest` 为准。根 README 面向使用者，版本测试说明保存在 `releases/<版本>/README.md`。
+藏舟是 fnOS 原生加密备份应用。源端运行本应用，通过 Kopia 将快照存放到 WebDAV 或 SFTP 仓库。FPK 分别面向 Linux x86-64 和 ARM64，版本及最低 fnOS 版本以发布包的 `manifest` 为准。根 README 面向使用者，版本说明保存在 `releases/<版本>/README.md`。
 
-当前源码在 `core/`；`core/cmd/cangzhou/` 是 Go 服务、HTML 模板和内嵌 JavaScript，`core/internal/authority/` 管理已授权路径检查。`core/vendor/` 是已固定依赖。`package/` 和 `source/` 是早期 0.0.2 权限诊断实验，不是当前发布模板。当前 FPK 模板在 `packaging/fnos/`；`scripts/build-fpk.sh` 从干净的 Git 提交构建；`dist/`、`releases/` 中的历史版本是留存产物，避免原地改写。
+当前源码在 `core/`；`core/cmd/cangzhou/` 是 Go 服务、HTML 模板和内嵌 JavaScript，`core/internal/authority/` 管理已授权路径检查。`core/vendor/` 是已固定依赖。当前 FPK 模板在 `package/`；`scripts/build-fpk.sh` 从干净的 Git 提交构建；`dist/`、`releases/` 中的历史版本是留存产物，避免原地改写。
 
 ## 应保持的行为与边界
 
@@ -41,4 +41,4 @@ CANGZHOU_TEST_KOPIA=/absolute/path/to/kopia go test -race ./...
 不要把本机构建或模拟服务测试描述为真实飞牛安装、网关或双 NAS 验证。`权限研究.md` 和 `docs/` 中的旧诊断记录有时间背景，其中关于“尚无备份功能”等表述只适用于早期实验。涉及目录权限或 fnOS 打包规范时，应重新核对官方文档及目标设备，不能根据旧记录补造系统行为。
 
 
-GitHub 和 Gitea 的测试与发布工作流分别位于 `.github/workflows/` 和 `.gitea/workflows/`，说明见 `docs/ci.md`。版本标签须与 `packaging/fnos/manifest` 一致；两端同名标签应指向同一提交。Gitea 优先验证并镜像 GitHub 的发布资产，必要时独立构建；推送标签前不要假定线上发布已完成。
+GitHub 和 Gitea 的测试与发布工作流分别位于 `.github/workflows/` 和 `.gitea/workflows/`，说明见 `docs/ci.md`。版本标签须与 `package/manifest` 一致；两端同名标签应指向同一提交。Gitea 优先验证并镜像 GitHub 的发布资产，必要时独立构建；推送标签前不要假定线上发布已完成。

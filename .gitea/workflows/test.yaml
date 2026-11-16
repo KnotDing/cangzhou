@@ -36,4 +36,4 @@ jobs:
         run: |
           ./scripts/build-fpk.sh
           CANGZHOU_ARCH=arm KOPIA="$GITHUB_WORKSPACE/tools/kopia-arm64" ./scripts/build-fpk.sh
-          (version="$(sed -n 's/^version=//p' packaging/fnos/manifest)"; cd artifacts && sha256sum "cangzhou-$version-x86.fpk" "cangzhou-$version-arm.fpk" > SHA256SUMS && sha256sum -c SHA256SUMS)
+          (version="$(sed -n 's/^version=//p' package/manifest)"; cd artifacts && sha256sum "cangzhou-$version-x86.fpk" "cangzhou-$version-arm.fpk" > SHA256SUMS && sha256sum -c SHA256SUMS)

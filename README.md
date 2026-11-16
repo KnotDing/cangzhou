@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="packaging/fnos/app/ui/images/icon_256.png" alt="藏舟图标" width="120">
+  <img src="package/app/ui/images/icon_256.png" alt="藏舟图标" width="120">
 
   # 藏舟
 
@@ -7,7 +7,7 @@
 
   面向飞牛 fnOS 的加密备份应用 · 基于 Kopia · 支持 WebDAV 和 SFTP
 
-  [下载测试版](https://github.com/KnotDing/cangzhou/releases) · [Gitea 发布页](https://gitea.knotding.com/knot/cangzhou/releases) · [安装与使用](#安装与使用) · [开发与构建](#开发与构建)
+  [下载](https://github.com/KnotDing/cangzhou/releases) · [Gitea 发布页](https://gitea.knotding.com/knot/cangzhou/releases) · [安装与使用](#安装与使用) · [开发与构建](#开发与构建)
 </div>
 
 藏舟运行在源飞牛设备上，将选定目录备份到 WebDAV 或 SFTP 远程仓库。它使用 Kopia 创建加密快照，并提供备份计划、历史记录、文件浏览和恢复界面。
@@ -16,7 +16,7 @@
 
 <p align="center"><sub>备份概览 · 截图使用模拟数据，来自 0.4.8，界面以实际版本为准</sub></p>
 
-> **当前为测试版。** 自动化和本地集成测试不能代替真实设备验证；真实飞牛网关、实际 WebDAV、大文件、网络中断及长时间运行等场景仍需进一步验证。请先使用可丢弃的数据完成备份和恢复测试，并保留其他备份。
+> 自动化和本地集成测试不能代替真实设备验证；真实飞牛网关、实际 WebDAV、大文件、网络中断及长时间运行等场景仍需进一步验证。请先使用可丢弃的数据完成备份和恢复测试，并保留其他备份。
 
 ## 功能
 
@@ -113,7 +113,7 @@
 
 ## 开发与构建
 
-当前源码位于 `core/`，使用 Go 1.24 或以上版本，依赖已存放于 `core/vendor/`。`packaging/fnos/` 是当前 FPK 模板，`scripts/` 包含构建和发布脚本。
+当前源码位于 `core/`，使用 Go 1.24 或以上版本，依赖已存放于 `core/vendor/`。`package/` 是当前 FPK 模板，`scripts/` 包含构建和发布脚本。
 
 运行测试：
 
